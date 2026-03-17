@@ -3,25 +3,37 @@ public class Monopattino {
     private int livelloBatteria;
     private float latitudine;
     private float longitudine;
-    private StatoMonopattino statoCorrente;
+    
+    // Riferimento al pattern State
+    private StatoMonopattino stato;
 
-    public Monopattino(String idVeicolo, float latitudine, float longitudine) {
+    // Costruttore chiamato dal pattern Creator
+    public Monopattino(String idVeicolo, float lat, float lon) {
         this.idVeicolo = idVeicolo;
-        this.latitudine = latitudine;
-        this.longitudine = longitudine;
-        this.livelloBatteria = 100; // Da contratto, parte al 100%
-        this.statoCorrente = new StatoDisponibile(); // Pattern State iniziale
+        this.latitudine = lat;
+        this.longitudine = lon;
+        this.livelloBatteria = 100; // Inizializzato al 100% come da post-condizioni
+        this.stato = new Disponibile(); // Stato di default
     }
 
-    public String getIdVeicolo() { return idVeicolo; }
-    public int getLivelloBatteria() { return livelloBatteria; }
-    public StatoMonopattino getStatoCorrente() { return statoCorrente; }
+    public String getId() {
+        return idVeicolo;
+    }
+
+    public int getBatteria() {
+        return livelloBatteria;
+    }
 
     public void setStato(StatoMonopattino nuovoStato) {
-        this.statoCorrente = nuovoStato;
+        this.stato = nuovoStato;
     }
-
+    
+    public StatoMonopattino getStatoCorrente() {
+        return stato;
+    }
+    
+    // Delega allo stato concreto
     public void sblocca() {
-        statoCorrente.sblocca(this);
+        stato.avviaCorsa(this);
     }
 }

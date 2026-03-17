@@ -1,19 +1,23 @@
 public class Main {
     public static void main(String[] args) {
-        // 1. Creazione dell'oggetto radice (Controller)
-        UrbanScoot sistema = new UrbanScoot();
+        // Avvio dell'applicazione (UC0)
+        UrbanScoot sistema = UrbanScoot.getInstance();
+        sistema.loadDatiIniziali(); // Carica USR-01 e MONO-01
 
-        // 2. Avviamento e caricamento dati (UC0)
-        sistema.loadDatiIniziali();
+        // L'Amministratore aggiunge un nuovo veicolo (UC2)
+        sistema.aggiungiNuovoMonopattino("MONO-02", 45.0f, 9.0f);
+        System.out.println("-------------------------------------------------");
 
-        // 3. Test UC1 (Inizia Corsa) con Utente con credito sufficiente
-        sistema.loginUtente("USR-01");
-        sistema.inserisciCodiceQR("MONO-01");
+        // L'Utente si avvicina e scansiona il codice (UC1 - Fase 1)
+        sistema.inserisciCodiceQR("MONO-02", "USR-01");
+
+        // L'Utente conferma nell'app (UC1 - Fase 2)
         sistema.confermaAvvioCorsa();
-
-        // 4. Test UC1 di un altro utente che prova a prendere lo stesso monopattino (Verifica Pattern State)
-        sistema.loginUtente("USR-02");
-        sistema.inserisciCodiceQR("MONO-01");
-        sistema.confermaAvvioCorsa(); // Dovrebbe dare errore perché MONO-01 è già in uso
+        
+        System.out.println("-------------------------------------------------");
+        
+        // Se un altro utente (o lo stesso) provasse a riprendere MONO-02:
+        sistema.inserisciCodiceQR("MONO-02", "USR-01");
+        sistema.confermaAvvioCorsa(); // Darà errore perché è già in uso!
     }
 }
