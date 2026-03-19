@@ -12,4 +12,9 @@ public class InUso implements StatoMonopattino {
         m.setStato(new Disponibile());
         System.out.println("Corsa terminata. Veicolo " + m.getId() + " bloccato.");
     }
+
+    public static StatoMonopattino getInstance() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'getInstance'");
+    }
 }

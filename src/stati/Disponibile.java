@@ -5,7 +5,7 @@ public class Disponibile implements StatoMonopattino {
     //esempio con singleton, non è necessario ma è un pattern comune per stati che non hanno variabili d'istanza
     private static Disponibile istanza;
     
-    private Disponibile() {} // Costruttore privato
+    public Disponibile() {} // Costruttore privato
     
     public static Disponibile getInstance() {
         if (istanza == null) istanza = new Disponibile();

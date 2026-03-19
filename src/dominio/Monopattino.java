@@ -1,7 +1,6 @@
 package dominio;
 
 import stati.Disponibile;
-import stati.InUso;
 import stati.StatoMonopattino;
 public class Monopattino {
     private String idVeicolo;
