@@ -43,7 +43,7 @@ public class Monopattino {
 
     // Transizione per avviare la corsa
     public void sblocca() {
-        this.statoCorrente = new InUso();
+        statoCorrente.avviaCorsa(this);
         System.out.println("Sblocco veicolo " + idVeicolo + " effettuato.");
     }
     public float getLatitudine() { return latitudine; }
