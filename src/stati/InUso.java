@@ -2,6 +2,15 @@ package stati;
 import dominio.Monopattino;
 
 public class InUso implements StatoMonopattino {
+    private static InUso istanza;
+    
+    private InUso() {} // Costruttore privato
+    
+    public static InUso getInstance() {
+        if (istanza == null) istanza = new InUso();
+        return istanza;
+    }
+
     @Override
     public void avviaCorsa(Monopattino m) {
         System.out.println("Errore: Il monopattino è già in uso da un altro utente.");
@@ -9,12 +18,8 @@ public class InUso implements StatoMonopattino {
 
     @Override
     public void terminaCorsa(Monopattino m) {
-        m.setStato(new Disponibile());
+        // Usa il Singleton di Disponibile, NON fare la 'new'!
+        m.setStato(Disponibile.getInstance()); 
         System.out.println("Corsa terminata. Veicolo " + m.getId() + " bloccato.");
-    }
-
-    public static StatoMonopattino getInstance() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getInstance'");
     }
 }

@@ -291,7 +291,7 @@ class MappaPanel extends JPanel {
                     if (mappaLayout[scooterR][scooterC] == 2) {
                         ((Timer) e.getSource()).stop(); 
                         JOptionPane.showMessageDialog(MappaPanel.this, 
-                            "BOOM! NINO è finito in una buca enorme!\nVeicolo distrutto irreparabilmente.", 
+                            "A seguito di impatto con una buca il monopattino risulta danneggiato!",
                             "Incidente", JOptionPane.ERROR_MESSAGE);
                         
                         controller.terminaCorsa(scooterR, scooterC, true, step);

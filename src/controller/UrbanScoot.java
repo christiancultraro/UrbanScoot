@@ -8,6 +8,8 @@ import dominio.Corsa;
 import dominio.Monopattino;
 import dominio.Tariffa;
 import dominio.Utente;
+import dominio.Amministratore;
+import dominio.Cliente;
 import stati.Dismesso;
 import stati.Disponibile;
 import stati.InManutenzione;
@@ -26,6 +28,8 @@ public class UrbanScoot {
     private Corsa corsaCorrente;
     private Monopattino monopattinoSelezionato;
     private Utente utenteCorrente;
+    private Amministratore admin;
+    private Cliente cliente;
 
     private UrbanScoot() {
         flotta = new HashMap<>();
@@ -43,17 +47,17 @@ public class UrbanScoot {
     }
 
     public void loadDatiIniziali() {
+        utentiRegistrati.put("USR-01", new Cliente("USR-01", 10.50f));
         aggiungiNuovoMonopattino("MONO-01", 37.5f, 15.0f);
-        utentiRegistrati.put("USR-01", new Utente("USR-01", 10.50f));
         System.out.println("Sistema avviato e dati caricati.\n");
         // Creiamo il conto per i test dell'Amministratore (con fondi infiniti!)
-        Utente admin = new Utente("ADMIN-01", 9999.00f);
+        Amministratore admin = new Amministratore("ADMIN-01");
         utentiRegistrati.put(admin.getId(), admin);
         // --- Dati per il Login ---
-        credenzialiAccesso.put("admin", "admin123");
+        credenzialiAccesso.put("admin", "admin");
         ruoliUtenti.put("admin", "ADMIN");
         
-        credenzialiAccesso.put("utente", "user123");
+        credenzialiAccesso.put("utente", "utente");
         ruoliUtenti.put("utente", "UTENTE");
     }
 

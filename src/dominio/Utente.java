@@ -1,27 +1,17 @@
 package dominio;
 public class Utente {
-    private String idCliente;
-    private float creditoResiduo;
+    private String idUtente;
 
-    public Utente(String idCliente, float creditoIniziale) {
-        this.idCliente = idCliente;
-        this.creditoResiduo = creditoIniziale;
+    public Utente(String idUtente) {
+        this.idUtente = idUtente;
     }
 
-    public String getIdCliente() {
-        return idCliente;
+    public String getUtente() {
+        return idUtente;
     }
 
-    public float getCreditoResiduo() {
-        return creditoResiduo;
-    }
-    
-    public void scalaCredito(float importo) {
-        this.creditoResiduo -= importo;
-    }
-
-    // Metodo per restituire l'ID dell'utente/admin
+    // Metodo per restituire l'ID dell'utente
     public String getId() {
-        return this.idCliente; // Se la tua variabile si chiama in modo diverso, es. solo "id", metti "this.id"
+        return this.idUtente; // Se la tua variabile si chiama in modo diverso, es. solo "id", metti "this.id"
     }
 }
