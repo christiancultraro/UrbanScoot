@@ -28,8 +28,6 @@ public class UrbanScoot {
     private Corsa corsaCorrente;
     private Monopattino monopattinoSelezionato;
     private Utente utenteCorrente;
-    private Amministratore admin;
-    private Cliente cliente;
 
     private UrbanScoot() {
         flotta = new HashMap<>();
@@ -84,9 +82,18 @@ public class UrbanScoot {
     public boolean confermaAvvioCorsa() {
         if (monopattinoSelezionato == null || utenteCorrente == null) return false;
 
-        float cred = utenteCorrente.getCreditoResiduo();
-        int batt = monopattinoSelezionato.getBatteria();
-
+        float cred = 0;
+        // Verifichiamo che l'utente loggato sia effettivamente un Cliente
+        if (utenteCorrente instanceof Cliente) {
+            // "Cast" (trasformazione) da Utente generico a Cliente
+            Cliente clienteCorrente = (Cliente) utenteCorrente;
+            cred = clienteCorrente.getCreditoResiduo();  
+        } else {
+            // Se è un Admin, ad esempio, non ha credito e non può fare corse!
+            return false; 
+        }
+                  
+            int batt = monopattinoSelezionato.getBatteria();
         // Le nostre regole (Pre-condizioni): Credito >= 1, Batteria > 10%, e deve essere Disponibile
         if (cred >= 1.00 && batt > 10 && monopattinoSelezionato.getStatoCorrente() instanceof Disponibile) {
             Corsa c = new Corsa(utenteCorrente, monopattinoSelezionato);
@@ -114,8 +121,11 @@ public class UrbanScoot {
         
         // Simula la stessa formula di Corsa.java per capire quanto costerà
         float costoStimato = 1.00f + 0.20f + (passiPrevisti * 0.05f);
-        
-        return utenteCorrente.getCreditoResiduo() >= costoStimato;
+        if (utenteCorrente instanceof Cliente) {
+            Cliente clienteCorrente = (Cliente) utenteCorrente;
+            return clienteCorrente.getCreditoResiduo() >= costoStimato;
+        }
+        return false; // Se non è un Cliente (es. è un Admin), non ha credito e non può noleggiare
     }
   // Aggiungi il parametro 'int passiEffettuati'
     public void terminaCorsa(float latArrivo, float lonArrivo, boolean guastoSegnalato, int passiEffettuati) {
@@ -136,7 +146,13 @@ public class UrbanScoot {
         monopattinoSelezionato.setBatteria(nuovaBatteria); 
         // --------------------
         
-        utenteCorrente.scalaCredito(costo);
+        if (utenteCorrente instanceof Cliente) {
+            // MODIFICA: Scala il credito solo se è un Cliente
+            if (utenteCorrente instanceof Cliente) {
+                Cliente cliente = (Cliente) utenteCorrente;
+                cliente.scalaCredito(costo); // Usa la variabile con il costo calcolato
+            }
+        }
         
         if (guastoSegnalato || monopattinoSelezionato.getBatteria() <= 10) {
             monopattinoSelezionato.setStato(new InManutenzione());
@@ -147,7 +163,10 @@ public class UrbanScoot {
         System.out.println("\n--- RICEVUTA CORSA ---");
         System.out.println("Distanza percorsa: " + passiEffettuati + " caselle");
         System.out.println("Costo Totale: " + String.format("%.2f", costo) + " EUR");
-        System.out.println("Credito Residuo: " + String.format("%.2f", utenteCorrente.getCreditoResiduo()) + " EUR");
+        if (utenteCorrente instanceof Cliente) {
+            Cliente clienteCorrente = (Cliente) utenteCorrente;
+            System.out.println("Credito Residuo: " + String.format("%.2f", clienteCorrente.getCreditoResiduo()) + " EUR");
+        }
         System.out.println("Batteria Residua: " + monopattinoSelezionato.getBatteria() + "%");
         
         corsaCorrente = null; 
