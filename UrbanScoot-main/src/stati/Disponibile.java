@@ -19,7 +19,7 @@ public class Disponibile implements StatoMonopattino {
     @Override
     public boolean avviaCorsa(Monopattino m) {
         // Il pattern State delega qui il cambiamento dinamico di stato
-        m.setStato(InUso.getInstance()); // Cambio stato dinamico!
+        m.setStato(InUso.getInstance()); // Cambio stato dinamico
         System.out.println("Sblocco veicolo " + m.getId() + " effettuato.");
         return true; // L'operazione va a buon fine
     }

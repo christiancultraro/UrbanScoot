@@ -15,7 +15,7 @@ public class InRiparazione implements StatoMonopattino {
         return false;
     } 
 
-    // --- METODI POLIMORFICI AGGIUNTI ---
+    
     @Override 
     public boolean isRiparazione() { 
         return true; 
@@ -24,6 +24,6 @@ public class InRiparazione implements StatoMonopattino {
     @Override 
     public void completaRiparazione(Monopattino m) {
         m.setBatteria(100);
-        m.setStato(Disponibile.getInstance()); // Singleton corretto!
+        m.setStato(Disponibile.getInstance()); // Singleton corretto
     }
 }

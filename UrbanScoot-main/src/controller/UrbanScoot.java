@@ -48,7 +48,7 @@ public class UrbanScoot {
         utentiRegistrati.put("USR-01", new Cliente("USR-01", 10.50f));
         aggiungiNuovoMonopattino("MONO-01", 37.5f, 15.0f);
         System.out.println("Sistema avviato e dati caricati.\n");
-        // Creiamo il conto per i test dell'Amministratore (con fondi infiniti!)
+       
         Amministratore admin = new Amministratore("ADMIN-01");
         utentiRegistrati.put(admin.getId(), admin);
         // --- Dati per il Login ---
@@ -82,9 +82,6 @@ public class UrbanScoot {
     public boolean confermaAvvioCorsa() {
         if (monopattinoSelezionato == null || utenteCorrente == null) return false;
 
-      
-        // Verifichiamo che l'utente loggato sia effettivamente un Cliente
-// Sostituisci il tuo vecchio blocco con questo:
 
         if (!utenteCorrente.puoNoleggiare()) {
             System.out.println("[App] Errore: l'utente attuale non è abilitato al noleggio.");
@@ -98,7 +95,7 @@ public class UrbanScoot {
                   
             int batt = monopattinoSelezionato.getBatteria();
         // Le nostre regole (Pre-condizioni): Credito >= 1, Batteria > 10%, e deve essere Disponibile
-        if (cred >= 1.00 && batt > 10 && monopattinoSelezionato.getStatoCorrente() instanceof Disponibile) {
+       if (cred >= 1.00 && batt > 10 && monopattinoSelezionato.getStatoCorrente().isDisponibile()) {
             Corsa c = new Corsa(utenteCorrente, monopattinoSelezionato);
             this.corsaCorrente = c; 
             monopattinoSelezionato.sblocca();
@@ -119,16 +116,19 @@ public class UrbanScoot {
         return 0;
     }
 // --- NUOVO METODO: PREVENTIVO ---
-    public boolean puoPermettersiCorsa(int passiPrevisti) {
-        if (utenteCorrente == null) return false;
-        
-        // Simula la stessa formula di Corsa.java per capire quanto costerà
-        float costoStimato = 1.00f + 0.20f + (passiPrevisti * 0.05f);
-        if (utenteCorrente instanceof Cliente) {
-            Cliente clienteCorrente = (Cliente) utenteCorrente;
-            return clienteCorrente.getCreditoResiduo() >= costoStimato;
+ public boolean puoPermettersiCorsa(int passiPrevisti) {
+        //  Controllo base: c'è un utente ed è abilitato al noleggio?
+        // (Se è un Admin, puoNoleggiare() restituirà false e bloccherà tutto subito)
+        if (utenteCorrente == null || !utenteCorrente.puoNoleggiare()) {
+            return false;
         }
-        return false; // Se non è un Cliente (es. è un Admin), non ha credito e non può noleggiare
+        
+        // Calcolo preventivo del costo
+        float costoStimato = 1.00f + 0.20f + (passiPrevisti * 0.05f);
+        
+        // Polimorfismo puro: chiediamo direttamente all'Utente il suo credito, 
+        // senza chiederci se è un Cliente o no!
+        return utenteCorrente.getCreditoResiduo() >= costoStimato;
     }
   // Aggiungi il parametro 'int passiEffettuati'
   public void terminaCorsa(float latArrivo, float lonArrivo, boolean guastoSegnalato, int passiEffettuati) {
@@ -162,17 +162,17 @@ public class UrbanScoot {
             }
         }
         
-        // 5. Polimorfismo puro: nessun "instanceof". Se è un Cliente scala, se è Admin ignora!
+        //  Polimorfismo puro: nessun "instanceof". Se è un Cliente scala, se è Admin ignora!
         utenteCorrente.scalaCredito(costo);
         
-        // 6. Stampa a console della ricevuta finale
+        //  Stampa a console della ricevuta finale
         System.out.println("Distanza percorsa: " + passiEffettuati + " caselle");
         System.out.println("Costo Addebitato: " + String.format("%.2f", costo) + " EUR");
         System.out.println("Credito Residuo: " + String.format("%.2f", utenteCorrente.getCreditoResiduo()) + " EUR");
         System.out.println("Batteria Residua: " + monopattinoSelezionato.getBatteria() + "%");
         System.out.println("==================\n");
         
-        // 7. Reset delle variabili di sessione per permettere nuovi noleggi
+        //  Reset delle variabili di sessione per permettere nuovi noleggi
         corsaCorrente = null; 
         monopattinoSelezionato = null;
     }
@@ -235,26 +235,24 @@ public class UrbanScoot {
         return false;
     }
 
-    // UC4 (Estensione): Rimuove il veicolo dalla circolazione
+    
+   // UC4 (Estensione): Rimuove il veicolo dalla circolazione
     public void dismettiVeicolo(String idVeicolo) {
         Monopattino m = flotta.get(idVeicolo);
         if (m != null) {
-            // Se Dismesso non è un Singleton, 'new' va bene. 
-            // Se lo hai reso Singleton, usa Dismesso.getInstance()
-            m.setStato(new Dismesso()); 
-            
-            // NOTA: Se lo rimuovi dalla mappa, la grafica non lo vedrà più.
-            // Se vuoi che l'utente veda l'icona nera, NON chiamare flotta.remove(idVeicolo);
-            // flotta.remove(idVeicolo); 
+            // Uso corretto del Singleton!
+            m.setStato(Dismesso.getInstance()); 
             
             System.out.println("[Admin] Veicolo " + idVeicolo + " impostato come DISMESSO.");
         }
     }
     // Estensione: usato da eventi di gioco (es. trappola) senza rimozione dalla flotta
+    // Estensione: usato da eventi di gioco (es. trappola) senza rimozione dalla flotta
     public void segnaVeicoloDismesso(String idVeicolo) {
         Monopattino m = flotta.get(idVeicolo);
         if (m != null) {
-            m.setStato(new Dismesso());
+            // Sostituito "new" con il Singleton corretto
+            m.setStato(Dismesso.getInstance());
         }
     }
 }
