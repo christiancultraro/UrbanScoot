@@ -29,4 +29,9 @@ public class Disponibile implements StatoMonopattino {
         System.out.println("Errore: Il monopattino è già disponibile e fermo.");
         return false; // Operazione non valida in questo stato
     }
+
+    @Override
+    public boolean isDisponibile() {
+        return true;
+    }
 }

@@ -3,7 +3,6 @@ import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
 import dominio.Corsa;
 import dominio.Monopattino;
 import dominio.Tariffa;
@@ -46,7 +45,8 @@ public class UrbanScoot {
 
     public void loadDatiIniziali() {
         utentiRegistrati.put("USR-01", new Cliente("USR-01", 10.50f));
-        aggiungiNuovoMonopattino("MONO-01", 37.5f, 15.0f);
+     
+        aggiungiNuovoMonopattino("MONO-01", 0f, 8f);
         System.out.println("Sistema avviato e dati caricati.\n");
        
         Amministratore admin = new Amministratore("ADMIN-01");
@@ -57,6 +57,7 @@ public class UrbanScoot {
         
         credenzialiAccesso.put("utente", "utente");
         ruoliUtenti.put("utente", "UTENTE");
+
     }
 
     public void aggiungiNuovoMonopattino(String idVeicolo, float lat, float lon) {
