@@ -1,4 +1,5 @@
 package ui;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -8,22 +9,25 @@ import javax.swing.Timer;
 
 import controller.UrbanScoot;
 import dominio.Monopattino;
-import stati.Dismesso;
 
 public class FinestraMappa extends JFrame {
     private UrbanScoot controller;
     private MappaPanel pannello;
     private boolean isAdminSession;
+    private String usernameSession; // Variabile aggiunta
 
-    public FinestraMappa(boolean isAdmin) {
+    // Costruttore aggiornato per ricevere lo username dalla FinestraLogin
+    public FinestraMappa(boolean isAdmin, String username) {
         this.isAdminSession = isAdmin;
+        this.usernameSession = username;
         controller = UrbanScoot.getInstance();
 
-        setTitle("UrbanScoot - " + (isAdmin ? "Pannello Admin" : "App Utente"));
+        setTitle("UrbanScoot - " + (isAdmin ? "Pannello Admin" : "App Utente: " + username));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout()); 
 
-        pannello = new MappaPanel(controller, isAdmin);
+        // Passiamo l'username anche al MappaPanel
+        pannello = new MappaPanel(controller, isAdmin, username);
         pannello.setPreferredSize(new Dimension(800, 600));
 
         // --- BARRA SUPERIORE ---
@@ -41,7 +45,6 @@ public class FinestraMappa extends JFrame {
                 JOptionPane.showMessageDialog(this, "Clicca su un Parcheggio (P) per far spawnare il monopattino!");
             });
             adminPanel.add(btnAggiungi);
-            // Istituzioni per l'admin
             JLabel lblInfo = new JLabel("  (Clicca sui veicoli Arancioni per Ripararli, Neri per Dismetterli)");
             lblInfo.setForeground(Color.WHITE);
             adminPanel.add(lblInfo);
@@ -72,9 +75,10 @@ public class FinestraMappa extends JFrame {
 class MappaPanel extends JPanel {
     private UrbanScoot controller;
     private boolean isAdmin;
+    private String usernameUtenteCorrente; // Variabile per ricordare chi siamo
     private final int DIM_CELLA = 50; 
     
-    // 0 = Strada, 1 = Palazzo, 3 = PARCHEGGIO (P) - Ora sono 5 coppie (10 caselle tot)
+    // La tua mappa personalizzata
     private int[][] mappaLayout = {
         {0, 0, 0, 1, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0},
         {0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0},
@@ -99,11 +103,12 @@ class MappaPanel extends JPanel {
     private int scooterR = 0; 
     private int scooterC = 0;
 
-    public MappaPanel(UrbanScoot controller, boolean isAdmin) {
+    // Costruttore aggiornato (Quello che ti dava errore!)
+    public MappaPanel(UrbanScoot controller, boolean isAdmin, String username) {
         this.controller = controller;
         this.isAdmin = isAdmin;
+        this.usernameUtenteCorrente = username; // Ora sa chi siamo!
 
-        // Genera le Trappole Nere (Valore 2)
         generaTrappolaCasuale();
 
         addMouseListener(new MouseAdapter() {
@@ -115,11 +120,11 @@ class MappaPanel extends JPanel {
                 int rigaC = e.getY() / DIM_CELLA;
                 if (rigaC < 0 || rigaC >= mappaLayout.length || colC < 0 || colC >= mappaLayout[0].length) return;
                 
-                if (mappaLayout[rigaC][colC] == 1) return; // I palazzi sono bloccati per tutti
+                if (mappaLayout[rigaC][colC] == 1) return; // Palazzi bloccati
 
                 // --- 1. MODALITÀ AGGIUNTA (Solo Admin) ---
                 if (modalitaAggiunta && isAdmin) {
-                    if (mappaLayout[rigaC][colC] == 3) { // Solo sui parcheggi!
+                    if (mappaLayout[rigaC][colC] == 3) {
                         String nuovoId = "MONO-0" + contatoreVeicoli++;
                         controller.aggiungiNuovoMonopattino(nuovoId, rigaC, colC);
                         modalitaAggiunta = false;
@@ -153,7 +158,7 @@ class MappaPanel extends JPanel {
                                 return;
                             }
                             
-                            // Se il veicolo è sano, TUTTI possono noleggiarlo (Utente e Admin)
+                            // Noleggio normale
                             avviaNoleggio(m, rigaC, colC);
                             return; 
                         }
@@ -161,7 +166,6 @@ class MappaPanel extends JPanel {
                 } 
                 // --- 3. GESTIONE A CORSA ATTIVA (Parcheggio) ---
                 else {
-                    // Sosta consentita solo sulla 'P' per tutti!
                     if (mappaLayout[rigaC][colC] != 3) {
                         JOptionPane.showMessageDialog(MappaPanel.this, 
                             "Errore Sosta Vietata!\nDevi parcheggiare nelle zone delimitate dalla 'P' azzurra.", 
@@ -174,7 +178,6 @@ class MappaPanel extends JPanel {
                         List<Point> itinerario = trovaPercorso(scooterR, scooterC, rigaC, colC);
                         if (itinerario.isEmpty()) return;
 
-                        // Qui il Controller leggerà l'Admin e vedrà i suoi 9999 EUR!
                         if (!controller.puoPermettersiCorsa(itinerario.size())) {
                             JOptionPane.showMessageDialog(MappaPanel.this, "Credito insufficiente per questo tragitto!", "Errore", JOptionPane.ERROR_MESSAGE);
                             return; 
@@ -186,7 +189,7 @@ class MappaPanel extends JPanel {
         });
     }
 
-    // Metodo helper per separare i conti!
+    // --- METODO DEL NOLEGGIO CON IL FIX DELL'ACCOUNT ---
     private void avviaNoleggio(Monopattino m, int rigaC, int colC) {
         if (controller.isVeicoloInManutenzione(m.getId()) || controller.isVeicoloDismesso(m.getId())) {
             JOptionPane.showMessageDialog(MappaPanel.this, "Questo veicolo è guasto o dismesso!", "Errore", JOptionPane.ERROR_MESSAGE);
@@ -196,27 +199,21 @@ class MappaPanel extends JPanel {
         int scelta = JOptionPane.showConfirmDialog(null, "Vuoi noleggiare " + m.getId() + "?", "Avvia", JOptionPane.YES_NO_OPTION);
         if (scelta == JOptionPane.YES_OPTION) {
             
-            // ECCO IL FIX DEI CONTI SEPARATI:
-           // Sceglie l'account giusto in base a chi ha fatto il Login!
-        String idAccount = isAdmin ? "ADMIN-01" : "USR-01";
-        controller.inserisciCodiceQR(m.getId(), idAccount);
+            // IL FIX DEFINITIVO: Usiamo il vero utente della sessione!
+            controller.inserisciCodiceQR(m.getId(), this.usernameUtenteCorrente);
             
-          if (controller.confermaAvvioCorsa()) {
+            if (controller.confermaAvvioCorsa()) {
                 corsaAttiva = true;
                 idVeicoloInUso = m.getId();
                 scooterR = rigaC;
                 scooterC = colC;
                 repaint();
             } else {
-                // --- NUOVO CONTROLLO PER LA GRAFICA ---
-                // Se siamo nella sessione Admin, mostriamo l'errore di permessi
                 if (isAdmin) {
                     JOptionPane.showMessageDialog(MappaPanel.this, 
-                        "Errore: Gli account Amministratore non sono abilitati al noleggio dei veicoli.", 
+                        "Errore: Gli account Amministratore non sono abilitati al noleggio.", 
                         "Accesso Negato", JOptionPane.ERROR_MESSAGE);
-                } 
-                // Altrimenti è un normale utente che non ha soldi o ha trovato un monopattino scarico
-                else {
+                } else {
                     JOptionPane.showMessageDialog(MappaPanel.this, 
                         "Impossibile avviare la corsa! Batteria o Credito insufficienti.", 
                         "Errore Avvio", JOptionPane.ERROR_MESSAGE);
@@ -228,7 +225,6 @@ class MappaPanel extends JPanel {
     private void generaTrappolaCasuale() {
         Random rand = new Random();
         int trappolePiazzate = 0;
-        // ORA PIAZZA 2 TRAPPOLE!
         while (trappolePiazzate < 2) {
             int r = rand.nextInt(mappaLayout.length);
             int c = rand.nextInt(mappaLayout[0].length);
@@ -306,12 +302,8 @@ class MappaPanel extends JPanel {
                             "A seguito di impatto con una buca il monopattino risulta danneggiato!",
                             "Incidente", JOptionPane.ERROR_MESSAGE);
                         
-                      controller.terminaCorsa(scooterR, scooterC, true, step);
-
-// La UI delega al Controller l'azione sul dominio! Molto più pulito.
-                      controller.segnaVeicoloDismesso(idVeicoloInUso); 
-
-
+                        controller.terminaCorsa(scooterR, scooterC, true, step);
+                        controller.segnaVeicoloDismesso(idVeicoloInUso); 
 
                         corsaAttiva = false;
                         inMovimento = false;

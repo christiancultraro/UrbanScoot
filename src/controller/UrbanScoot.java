@@ -43,21 +43,24 @@ public class UrbanScoot {
         return istanza;
     }
 
-    public void loadDatiIniziali() {
-        utentiRegistrati.put("USR-01", new Cliente("USR-01", 10.50f));
-     
+public void loadDatiIniziali() {
+        // IL FIX: Ora l'oggetto si chiama esattamente "utente", come il login!
+        utentiRegistrati.put("utente", new Cliente("utente", 10.50f));
+        
+        // Ho lasciato lo spawn alla riga 0, colonna 8 così appare nel parcheggio
         aggiungiNuovoMonopattino("MONO-01", 0f, 8f);
         System.out.println("Sistema avviato e dati caricati.\n");
        
-        Amministratore admin = new Amministratore("ADMIN-01");
-        utentiRegistrati.put(admin.getId(), admin);
+        // IL FIX: Ora l'oggetto admin si chiama esattamente "admin", come il login!
+        Amministratore admin = new Amministratore("admin");
+        utentiRegistrati.put("admin", admin);
+        
         // --- Dati per il Login ---
         credenzialiAccesso.put("admin", "admin");
         ruoliUtenti.put("admin", "ADMIN");
         
         credenzialiAccesso.put("utente", "utente");
         ruoliUtenti.put("utente", "UTENTE");
-
     }
 
     public void aggiungiNuovoMonopattino(String idVeicolo, float lat, float lon) {
@@ -237,14 +240,14 @@ public class UrbanScoot {
     }
 
     
-   // UC4 (Estensione): Rimuove il veicolo dalla circolazione
+ // UC4 (Estensione): Rimuove il veicolo dalla circolazione
     public void dismettiVeicolo(String idVeicolo) {
-        Monopattino m = flotta.get(idVeicolo);
+        // Invece di recuperarlo con get(), usiamo remove() che lo 
+        // estrae e lo cancella per sempre dalla memoria del sistema!
+        Monopattino m = flotta.remove(idVeicolo); 
+        
         if (m != null) {
-            // Uso corretto del Singleton!
-            m.setStato(Dismesso.getInstance()); 
-            
-            System.out.println("[Admin] Veicolo " + idVeicolo + " impostato come DISMESSO.");
+            System.out.println("[Admin] Veicolo " + idVeicolo + " RIMOSSO DEFINITIVAMENTE dalla flotta.");
         }
     }
     // Estensione: usato da eventi di gioco (es. trappola) senza rimozione dalla flotta
@@ -255,6 +258,33 @@ public class UrbanScoot {
             // Sostituito "new" con il Singleton corretto
             m.setStato(Dismesso.getInstance());
         }
+    }
+
+    // --- UC: REGISTRA NUOVO UTENTE ---
+    // --- UC: REGISTRA NUOVO UTENTE ---
+    public float registraNuovoUtente(String username, String password) {
+        // 1. Controllo Pre-condizione: l'utente esiste già?
+        if (utentiRegistrati.containsKey(username) || credenzialiAccesso.containsKey(username)) {
+            System.out.println("[App] Errore: Username già in uso.");
+            return -1.0f; // Valore sentinella per indicare errore
+        }
+
+        // 2. Simulazione del Sistema Esterno (Banca) all'interno del Dominio
+        float creditoGenerato = (float) (Math.random() * 50) + 10;
+        creditoGenerato = Math.round(creditoGenerato * 100.0f) / 100.0f;
+
+        // 3. Pattern Creator
+        Cliente nuovoCliente = new Cliente(username, creditoGenerato);
+        
+        // 4. Salvataggio in memoria
+        utentiRegistrati.put(username, nuovoCliente);
+        credenzialiAccesso.put(username, password);
+        ruoliUtenti.put(username, "UTENTE");
+        
+        System.out.println("[Sistema] Utente registrato: " + username + " con credito: " + creditoGenerato);
+        
+        // Restituiamo il credito alla UI affinché lo mostri all'utente
+        return creditoGenerato; 
     }
 }
 
