@@ -19,8 +19,6 @@ public class Corsa {
         return orarioInizio;
     }
 
-    // --- METODO AGGIORNATO ---
-    // Ora riceve la tariffa e i passi effettuati, non più lat e lon
     public float calcolaCostoFinale(Tariffa t, int passiEffettuati) {
         this.orarioFine = LocalDateTime.now();
         

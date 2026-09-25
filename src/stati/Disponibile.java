@@ -6,7 +6,7 @@ public class Disponibile implements StatoMonopattino {
     // Pattern Singleton per stati senza variabili d'istanza
     private static Disponibile istanza;
     
-    // DEVE essere private, altrimenti addio Singleton!
+   
     private Disponibile() {} 
     
     public static Disponibile getInstance() {

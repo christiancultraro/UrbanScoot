@@ -28,8 +28,5 @@ public class Cliente extends Utente{
         return this.creditoResiduo; 
     }
 
-    // Metodo per restituire l'ID del cliente
-    /*public String getId() {
-        return this.idCliente; // Se la tua variabile si chiama in modo diverso, es. solo "id", metti "this.id"
-    }*/
+   
 }

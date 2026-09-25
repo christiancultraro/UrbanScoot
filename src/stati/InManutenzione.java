@@ -3,6 +3,17 @@ import dominio.Monopattino;
 
 public class InManutenzione implements StatoMonopattino {
     
+    private static InManutenzione istanza;
+    
+    private InManutenzione() {}
+    
+    public static InManutenzione getInstance() {
+        if (istanza == null) {
+            istanza = new InManutenzione();
+        }
+        return istanza;
+    }
+
     @Override
     public boolean avviaCorsa(Monopattino m) {
         System.out.println("Errore: Veicolo in manutenzione, non noleggiabile.");
@@ -15,15 +26,14 @@ public class InManutenzione implements StatoMonopattino {
         return false;
     }
 
-    // --- METODI POLIMORFICI AGGIUNTI ---
     @Override 
     public boolean isManutenzione() { 
         return true; 
     }
 
-    @Override 
+   @Override 
     public void inviaInRiparazione(Monopattino m) {
-        // Se InRiparazione non è un singleton, la new va benissimo!
-        m.setStato(new InRiparazione()); 
+        // Ora usa correttamente il Singleton!
+        m.setStato(InRiparazione.getInstance()); 
     }
 }

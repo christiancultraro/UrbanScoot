@@ -3,7 +3,7 @@ public class Tariffa {
     private String nomeTariffa;
     private float scattoIniziale;
     private float costoAlMinuto;
-    private float costoPerCasella; // <-- NUOVO ATTRIBUTO
+    private float costoPerCasella; 
 
     public Tariffa(String nome, float scatto, float costoMinuto, float costoCasella) {
         this.nomeTariffa = nome;
