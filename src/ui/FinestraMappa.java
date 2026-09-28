@@ -5,18 +5,20 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
 import java.util.List;
+import java.util.Queue;
+
 import javax.swing.Timer;
 
 import controller.UrbanScoot;
 import dominio.Monopattino;
+import dominio.Corsa; // <-- IMPORTANTE: aggiunto per lo storico
 
 public class FinestraMappa extends JFrame {
     private UrbanScoot controller;
     private MappaPanel pannello;
     private boolean isAdminSession;
-    private String usernameSession; // Variabile aggiunta
+    private String usernameSession;
 
-    // Costruttore aggiornato per ricevere lo username dalla FinestraLogin
     public FinestraMappa(boolean isAdmin, String username) {
         this.isAdminSession = isAdmin;
         this.usernameSession = username;
@@ -26,7 +28,6 @@ public class FinestraMappa extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout()); 
 
-        // Passiamo l'username anche al MappaPanel
         pannello = new MappaPanel(controller, isAdmin, username);
         pannello.setPreferredSize(new Dimension(800, 600));
 
@@ -65,20 +66,116 @@ public class FinestraMappa extends JFrame {
         barraSuperiore.add(logoutPanel, BorderLayout.EAST);
 
         add(barraSuperiore, BorderLayout.NORTH); 
-        add(pannello, BorderLayout.CENTER); 
+
+        // --- GESTIONE SCHEDE (TAB) PER L'UTENTE ---
+        if (!isAdmin) {
+            JTabbedPane tabbedPane = new JTabbedPane();
+            tabbedPane.addTab("📍 Mappa & Noleggio", pannello);
+            tabbedPane.addTab("💳 Ricarica Credito", creaPannelloRicarica());
+            tabbedPane.addTab("📜 Storico Corse", creaPannelloStorico());
+            
+            add(tabbedPane, BorderLayout.CENTER);
+        } else {
+            // L'admin vede solo la mappa
+            add(pannello, BorderLayout.CENTER); 
+        }
 
         pack(); 
         setLocationRelativeTo(null); 
     }
+
+    // --- PANNELLO UC5: RICARICA CREDITO ---
+    private JPanel creaPannelloRicarica() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(10, 10, 10, 10);
+        
+        JLabel lblTitolo = new JLabel("Ricarica il tuo Portafoglio");
+        lblTitolo.setFont(new Font("Arial", Font.BOLD, 20));
+        
+        JLabel lblImporto = new JLabel("Inserisci l'importo (€):");
+        JTextField txtImporto = new JTextField(10);
+        txtImporto.setFont(new Font("Arial", Font.PLAIN, 16));
+        
+        JButton btnRicarica = new JButton("Conferma Ricarica");
+        btnRicarica.setBackground(new Color(0, 153, 76));
+        btnRicarica.setForeground(Color.WHITE);
+        
+        JLabel lblMessaggio = new JLabel(" ");
+        lblMessaggio.setFont(new Font("Arial", Font.BOLD, 14));
+
+        btnRicarica.addActionListener(e -> {
+            try {
+                float importo = Float.parseFloat(txtImporto.getText().replace(",", "."));
+                float nuovoCredito = controller.ricaricaCredito(importo);
+                
+                if (nuovoCredito != -1.0f) {
+                    lblMessaggio.setText("✅ Ricarica effettuata con successo! Nuovo saldo: " + String.format("%.2f", nuovoCredito) + " €");
+                    lblMessaggio.setForeground(new Color(0, 150, 0));
+                    txtImporto.setText(""); // Svuota il campo
+                } else {
+                    lblMessaggio.setText("❌ Errore durante la ricarica.");
+                    lblMessaggio.setForeground(Color.RED);
+                }
+            } catch (NumberFormatException ex) {
+                lblMessaggio.setText("❌ Inserisci un importo valido (es. 10.50).");
+                lblMessaggio.setForeground(Color.RED);
+            }
+        });
+
+        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2; panel.add(lblTitolo, gbc);
+        gbc.gridy = 1; gbc.gridwidth = 1; panel.add(lblImporto, gbc);
+        gbc.gridx = 1; panel.add(txtImporto, gbc);
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2; panel.add(btnRicarica, gbc);
+        gbc.gridy = 3; panel.add(lblMessaggio, gbc);
+
+        return panel;
+    }
+
+    // --- PANNELLO UC6: STORICO CORSE ---
+    private JPanel creaPannelloStorico() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+        JButton btnAggiorna = new JButton("🔄 Aggiorna Storico");
+        JTextArea txtStorico = new JTextArea();
+        txtStorico.setEditable(false);
+        txtStorico.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        JScrollPane scrollPane = new JScrollPane(txtStorico);
+
+        btnAggiorna.addActionListener(e -> {
+            txtStorico.setText("=== STORICO CORSE DI " + usernameSession.toUpperCase() + " ===\n\n");
+            
+            // Richiama l'operazione di sistema
+            List<Corsa> corse = controller.richiediStoricoCorse();
+            
+            if (corse.isEmpty()) {
+                txtStorico.append(" Nessuna corsa effettuata finora.\n");
+            } else {
+              for (Corsa c : corse) {
+                    txtStorico.append("🛴 Veicolo:\t" + c.getMonopattino().getId() + "\n");
+                    txtStorico.append("🕒 Data:\t" + c.getOrarioInizio().toLocalDate() + " " + c.getOrarioInizio().toLocalTime().withNano(0) + "\n");
+                    // NUOVA RIGA:
+                    txtStorico.append("💶 Costo:\t" + String.format("%.2f", c.getCostoTotale()) + " €\n");
+                    txtStorico.append("--------------------------------------------------\n");
+                }
+            }
+        });
+
+        panel.add(btnAggiorna, BorderLayout.NORTH);
+        panel.add(scrollPane, BorderLayout.CENTER);
+
+        return panel;
+    }
 }
 
+// --- CLASSE MAPPAPANEL (INTATTA) ---
 class MappaPanel extends JPanel {
     private UrbanScoot controller;
     private boolean isAdmin;
-    private String usernameUtenteCorrente; // Variabile per ricordare chi siamo
+    private String usernameUtenteCorrente; 
     private final int DIM_CELLA = 50; 
     
-    // La tua mappa personalizzata
     private int[][] mappaLayout = {
         {0, 0, 0, 1, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0},
         {0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0},
@@ -103,11 +200,10 @@ class MappaPanel extends JPanel {
     private int scooterR = 0; 
     private int scooterC = 0;
 
-    // Costruttore aggiornato (Quello che ti dava errore!)
     public MappaPanel(UrbanScoot controller, boolean isAdmin, String username) {
         this.controller = controller;
         this.isAdmin = isAdmin;
-        this.usernameUtenteCorrente = username; // Ora sa chi siamo!
+        this.usernameUtenteCorrente = username; 
 
         generaTrappolaCasuale();
 
@@ -120,9 +216,8 @@ class MappaPanel extends JPanel {
                 int rigaC = e.getY() / DIM_CELLA;
                 if (rigaC < 0 || rigaC >= mappaLayout.length || colC < 0 || colC >= mappaLayout[0].length) return;
                 
-                if (mappaLayout[rigaC][colC] == 1) return; // Palazzi bloccati
+                if (mappaLayout[rigaC][colC] == 1) return; 
 
-                // --- 1. MODALITÀ AGGIUNTA (Solo Admin) ---
                 if (modalitaAggiunta && isAdmin) {
                     if (mappaLayout[rigaC][colC] == 3) {
                         String nuovoId = "MONO-0" + contatoreVeicoli++;
@@ -137,12 +232,10 @@ class MappaPanel extends JPanel {
                     return;
                 }
 
-                // --- 2. GESTIONE A CORSA FERMA (Noleggio o Riparazione) ---
                 if (!corsaAttiva) {
                     for (Monopattino m : controller.getFlotta()) {
                         if ((int)m.getLatitudine() == rigaC && (int)m.getLongitudine() == colC) {
                             
-                            // Poteri esclusivi dell'Admin: Riparare e Dismettere
                             if (isAdmin && controller.isVeicoloInManutenzione(m.getId())) {
                                 controller.prendiInCarico(m.getId());
                                 controller.registraManutenzioneCompletata(m.getId());
@@ -158,13 +251,11 @@ class MappaPanel extends JPanel {
                                 return;
                             }
                             
-                            // Noleggio normale
                             avviaNoleggio(m, rigaC, colC);
                             return; 
                         }
                     }
                 } 
-                // --- 3. GESTIONE A CORSA ATTIVA (Parcheggio) ---
                 else {
                     if (mappaLayout[rigaC][colC] != 3) {
                         JOptionPane.showMessageDialog(MappaPanel.this, 
@@ -189,7 +280,6 @@ class MappaPanel extends JPanel {
         });
     }
 
-    // --- METODO DEL NOLEGGIO CON IL FIX DELL'ACCOUNT ---
     private void avviaNoleggio(Monopattino m, int rigaC, int colC) {
         if (controller.isVeicoloInManutenzione(m.getId()) || controller.isVeicoloDismesso(m.getId())) {
             JOptionPane.showMessageDialog(MappaPanel.this, "Questo veicolo è guasto o dismesso!", "Errore", JOptionPane.ERROR_MESSAGE);
@@ -199,7 +289,6 @@ class MappaPanel extends JPanel {
         int scelta = JOptionPane.showConfirmDialog(null, "Vuoi noleggiare " + m.getId() + "?", "Avvia", JOptionPane.YES_NO_OPTION);
         if (scelta == JOptionPane.YES_OPTION) {
             
-            // IL FIX DEFINITIVO: Usiamo il vero utente della sessione!
             controller.inserisciCodiceQR(m.getId(), this.usernameUtenteCorrente);
             
             if (controller.confermaAvvioCorsa()) {
@@ -275,7 +364,7 @@ class MappaPanel extends JPanel {
         return percorso;
     }
 
-    private void avviaAnimazioneViaggio(List<Point> itinerario, int destR, int destC) {
+   private void avviaAnimazioneViaggio(List<Point> itinerario, int destR, int destC) {
         inMovimento = true;
         int maxPassi = Math.max(0, controller.getBatteriaSelezionato() / 4); 
         
@@ -298,11 +387,15 @@ class MappaPanel extends JPanel {
                     
                     if (mappaLayout[scooterR][scooterC] == 2) {
                         ((Timer) e.getSource()).stop(); 
-                        JOptionPane.showMessageDialog(MappaPanel.this, 
-                            "A seguito di impatto con una buca il monopattino risulta danneggiato!",
-                            "Incidente", JOptionPane.ERROR_MESSAGE);
                         
-                        controller.terminaCorsa(scooterR, scooterC, true, step);
+                        // 1. INCIDENTE: Termina la corsa, ottiene il costo (che sarà 0.0f) e mostra la ricevuta
+                        float costo = controller.terminaCorsa(scooterR, scooterC, true, step);
+                        JOptionPane.showMessageDialog(MappaPanel.this, 
+                            "A seguito di impatto con una buca il monopattino risulta danneggiato!\n" +
+                            "La corsa è stata rimborsata per il disagio.\n\n" +
+                            "Costo Addebitato: " + String.format("%.2f", costo) + " €",
+                            "Ricevuta - Incidente", JOptionPane.ERROR_MESSAGE);
+                        
                         controller.segnaVeicoloDismesso(idVeicoloInUso); 
 
                         corsaAttiva = false;
@@ -317,7 +410,16 @@ class MappaPanel extends JPanel {
                     ((Timer) e.getSource()).stop(); 
                     int destRealeR = itinerarioEffettivo.get(itinerarioEffettivo.size() - 1).x;
                     int destRealeC = itinerarioEffettivo.get(itinerarioEffettivo.size() - 1).y;
-                    controller.terminaCorsa(destRealeR, destRealeC, false, itinerarioEffettivo.size() - 1);
+                    
+                    // 2. ARRIVO NORMALE: Termina la corsa, ottiene il costo effettivo e mostra la ricevuta
+                    float costo = controller.terminaCorsa(destRealeR, destRealeC, false, itinerarioEffettivo.size() - 1);
+                    JOptionPane.showMessageDialog(MappaPanel.this, 
+                        "Hai parcheggiato correttamente il veicolo.\n\n" +
+                        "Distanza percorsa: " + (itinerarioEffettivo.size() - 1) + " passi\n" +
+                        "Costo Addebitato: " + String.format("%.2f", costo) + " €\n\n" +
+                        "Il tuo saldo è stato aggiornato.",
+                        "Ricevuta Corsa", JOptionPane.INFORMATION_MESSAGE);
+                        
                     corsaAttiva = false;
                     inMovimento = false;
                     idVeicoloInUso = ""; 

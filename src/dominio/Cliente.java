@@ -1,5 +1,6 @@
 package dominio;
-public class Cliente extends Utente{
+
+public class Cliente extends Utente {
     private float creditoResiduo;
 
     public Cliente(String idCliente, float creditoIniziale) {
@@ -11,22 +12,22 @@ public class Cliente extends Utente{
         return this.getId();
     }
 
-    
-    
-    @Override
+    // Metodi propri del Cliente (non più ereditati/sovrascritti da Utente)
     public void scalaCredito(float importo) {
         this.creditoResiduo -= importo;
     }
 
-    @Override
-    public boolean puoNoleggiare() {
-    return true; // Solo il cliente ha questo diritto
+    public void ricaricaCredito(float importo) {
+        if (importo > 0) {
+            this.creditoResiduo += importo;
+        }
     }
 
-    @Override
+    public boolean puoNoleggiare() {
+        return true; 
+    }
+
     public float getCreditoResiduo() {
         return this.creditoResiduo; 
     }
-
-   
 }

@@ -3,18 +3,23 @@ import java.time.LocalDateTime;
 import java.time.Duration;
 
 public class Corsa {
-    private Utente utente;
+    private Cliente cliente;
     private Monopattino monopattino;
     private LocalDateTime orarioInizio;
     private LocalDateTime orarioFine;
     private float costoTotale;
 
-    public Corsa(Utente u, Monopattino m) {
-        this.utente = u;
+    public Corsa(Cliente c, Monopattino m) {
+        this.cliente = c;
         this.monopattino = m;
         this.orarioInizio = LocalDateTime.now();
     }
-
+    public Cliente getCliente() {
+        return this.cliente;
+    }
+    public Monopattino getMonopattino() {
+        return this.monopattino;
+    }
     public LocalDateTime getOrarioInizio() {
         return orarioInizio;
     }
@@ -32,5 +37,11 @@ public class Corsa {
                            (passiEffettuati * t.getCostoPerCasella());
                            
         return this.costoTotale;
+    }
+    public float getCostoTotale() {
+        return this.costoTotale;
+    }
+    public void setCostoTotale(float nuovoCosto) {
+        this.costoTotale = nuovoCosto;
     }
 }

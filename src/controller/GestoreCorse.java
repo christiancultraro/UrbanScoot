@@ -3,19 +3,19 @@ package controller;
 import dominio.Corsa;
 import dominio.Monopattino;
 import dominio.Tariffa;
-import dominio.Utente;
+import dominio.Cliente;
 import stati.InManutenzione;
 import stati.Disponibile;
 
 public class GestoreCorse {
     
-    // Non richiede più lo "storico", si limita a restituire la Corsa valida
-    public Corsa iniziaCorsa(Utente u, Monopattino m) {
-        float cred = u.getCreditoResiduo();
+    // Riceve direttamente un Cliente, garantendo la sicurezza del tipo senza cast
+    public Corsa iniziaCorsa(Cliente cliente, Monopattino m) {
+        float cred = cliente.getCreditoResiduo();
         int batt = m.getBatteria();
         
         if (cred >= 1.00 && batt > 10 && m.getStatoCorrente().isDisponibile()) {
-            Corsa c = new Corsa(u, m);
+            Corsa c = new Corsa(cliente, m);
             m.sblocca(); 
             System.out.println("[App] Sblocco confermato, timer avviato.");
             return c;
@@ -25,7 +25,8 @@ public class GestoreCorse {
         }
     }
     
-    public void terminaCorsa(Corsa corsaCorrente, Monopattino monopattinoSelezionato, Utente utenteCorrente, 
+    // Sostituito Utente con Cliente come Information Expert per il pagamento
+    public float terminaCorsa(Corsa corsaCorrente, Monopattino monopattinoSelezionato, Cliente cliente, 
                              float latArrivo, float lonArrivo, boolean guastoSegnalato, int passiEffettuati) {
                              
         monopattinoSelezionato.setPosizione(latArrivo, lonArrivo);
@@ -41,6 +42,7 @@ public class GestoreCorse {
             System.out.println("[!] ALLARME: Rilevato incidente o guasto critico al veicolo.");
             System.out.println("[!] Politica Aziendale: La corsa viene rimborsata per il disagio causato.");
             costo = 0.0f; 
+            corsaCorrente.setCostoTotale(0.0f);
             monopattinoSelezionato.setStato(InManutenzione.getInstance());
         } else {
             System.out.println("--- RICEVUTA NORMALE ---");
@@ -49,14 +51,17 @@ public class GestoreCorse {
             } else {
                 monopattinoSelezionato.setStato(Disponibile.getInstance());
             }
+           
         }
         
-        utenteCorrente.scalaCredito(costo);
+        // Delega pulita senza assumere comportamenti fittizi per l'Amministratore
+        cliente.scalaCredito(costo);
         
         System.out.println("Distanza percorsa: " + passiEffettuati + " caselle");
         System.out.println("Costo Addebitato: " + String.format("%.2f", costo) + " EUR");
-        System.out.println("Credito Residuo: " + String.format("%.2f", utenteCorrente.getCreditoResiduo()) + " EUR");
+        System.out.println("Credito Residuo: " + String.format("%.2f", cliente.getCreditoResiduo()) + " EUR");
         System.out.println("Batteria Residua: " + monopattinoSelezionato.getBatteria() + "%");
         System.out.println("==================\n");
+        return costo;
     }
 }

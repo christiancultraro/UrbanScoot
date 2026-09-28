@@ -1,4 +1,3 @@
-
 package controller;
 
 import java.util.HashMap;
@@ -12,31 +11,42 @@ import dominio.Amministratore;
 import dominio.Cliente;
 
 public class UrbanScoot {
+    // Singleton[cite: 6]
     private static UrbanScoot istanza;
     
-    // Modificato: uso dell'oggetto Flotta al posto della Map
     private Flotta flotta;
-    private Map<String, Utente> utentiRegistrati;
+    // Mappe separate per evitare cast e type-checking
+    private Map<String, Cliente> clientiRegistrati;
+    private Map<String, Amministratore> adminRegistrati;
     private List<Corsa> storicoCorse;
     private Map<String, String> credenzialiAccesso;
     private Map<String, String> ruoliUtenti;
     
     private Corsa corsaCorrente;
     private Monopattino monopattinoSelezionato;
-    private Utente utenteCorrente;
     
+    // Sessioni separate per il polimorfismo implicito
+    private Utente utenteCorrente; 
+    private Cliente clienteCorrente; 
+    
+    // Gestori (Pure Fabrication)
     private GestoreCorse gestoreCorse;
     private GestoreManutenzione gestoreManutenzione;
+    private GestoreAccount gestoreAccount;
+    private GestoreStorico gestoreStorico;
 
     private UrbanScoot() {
         flotta = new Flotta();
-        utentiRegistrati = new HashMap<>();
+        clientiRegistrati = new HashMap<>();
+        adminRegistrati = new HashMap<>();
         storicoCorse = new ArrayList<>();
         credenzialiAccesso = new HashMap<>();
         ruoliUtenti = new HashMap<>();
         
         gestoreCorse = new GestoreCorse();
         gestoreManutenzione = new GestoreManutenzione();
+        gestoreAccount = new GestoreAccount();
+        gestoreStorico = new GestoreStorico();
     }
 
     public static UrbanScoot getInstance() {
@@ -47,12 +57,12 @@ public class UrbanScoot {
     }
 
     public void loadDatiIniziali() {
-        utentiRegistrati.put("utente", new Cliente("utente", 10.50f));
+        clientiRegistrati.put("utente", new Cliente("utente", 10.50f));
         aggiungiNuovoMonopattino("MONO-01", 0f, 8f);
         System.out.println("Sistema avviato e dati caricati.\n");
        
         Amministratore admin = new Amministratore("admin");
-        utentiRegistrati.put("admin", admin);
+        adminRegistrati.put("admin", admin);
         
         credenzialiAccesso.put("admin", "admin");
         ruoliUtenti.put("admin", "ADMIN");
@@ -61,35 +71,48 @@ public class UrbanScoot {
         ruoliUtenti.put("utente", "UTENTE");
     }
 
-    public void aggiungiNuovoMonopattino(String idVeicolo, float lat, float lon) {
-        Monopattino m = new Monopattino(idVeicolo, lat, lon);
-        flotta.aggiungi(m);
-        System.out.println("[Admin] Veicolo " + idVeicolo + " registrato.");
+    // Autenticazione pulita basata sulle mappe
+    public String autenticaUtente(String username, String password) {
+        if (credenzialiAccesso.containsKey(username) && credenzialiAccesso.get(username).equals(password)) {
+            if (clientiRegistrati.containsKey(username)) {
+                this.clienteCorrente = clientiRegistrati.get(username);
+                this.utenteCorrente = this.clienteCorrente; 
+                return "UTENTE";
+            } else if (adminRegistrati.containsKey(username)) {
+                this.clienteCorrente = null;
+                this.utenteCorrente = adminRegistrati.get(username);
+                return "ADMIN";
+            }
+        }
+        return "ERRORE";
     }
 
     public void inserisciCodiceQR(String idVeicolo, String idUtente) {
         Monopattino m = flotta.cerca(idVeicolo);
-        Utente u = utentiRegistrati.get(idUtente);
         
-        if (m != null && u != null) {
+        // La lettura del QR è consentita solo a un Cliente registrato
+        if (m != null && clientiRegistrati.containsKey(idUtente)) {
             this.monopattinoSelezionato = m;
-            this.utenteCorrente = u;
+            this.clienteCorrente = clientiRegistrati.get(idUtente);
+            this.utenteCorrente = this.clienteCorrente;
             System.out.println("[App] QR Letto. Veicolo: " + m.getId() + " | Batteria: " + m.getBatteria() + "%");
         } else {
             System.out.println("[App] Errore: Veicolo o Utente non trovato.");
         }
     }
 
-    public boolean confermaAvvioCorsa() {
-        if (monopattinoSelezionato == null || utenteCorrente == null) return false;
+    // --- GESTIONE CORSE (UC1 e UC3) ---
 
-        if (!utenteCorrente.puoNoleggiare()) {
+    public boolean confermaAvvioCorsa() {
+        // Usiamo clienteCorrente al posto di utenteCorrente
+        if (monopattinoSelezionato == null || clienteCorrente == null) return false;
+
+        if (!clienteCorrente.puoNoleggiare()) {
             System.out.println("[App] Errore: l'utente attuale non è abilitato al noleggio.");
             return false;
         }
 
-        // Il gestore crea la corsa, UrbanScoot gestisce l'aggiunta allo storico locale
-        Corsa c = gestoreCorse.iniziaCorsa(utenteCorrente, monopattinoSelezionato);
+        Corsa c = gestoreCorse.iniziaCorsa(clienteCorrente, monopattinoSelezionato);
         
         if (c != null) {
             storicoCorse.add(c);
@@ -107,20 +130,45 @@ public class UrbanScoot {
     }
 
     public boolean puoPermettersiCorsa(int passiPrevisti) {
-        if (utenteCorrente == null || !utenteCorrente.puoNoleggiare()) {
+        // Delega all'Information Expert (Cliente)
+        if (clienteCorrente == null || !clienteCorrente.puoNoleggiare()) {
             return false;
         }
         float costoStimato = 1.00f + 0.20f + (passiPrevisti * 0.05f);
-        return utenteCorrente.getCreditoResiduo() >= costoStimato;
+        return clienteCorrente.getCreditoResiduo() >= costoStimato;
     }
 
-    public void terminaCorsa(float latArrivo, float lonArrivo, boolean guastoSegnalato, int passiEffettuati) {
-        if (corsaCorrente == null) return;
+    public float terminaCorsa(float latArrivo, float lonArrivo, boolean guastoSegnalato, int passiEffettuati) {
+        if (corsaCorrente == null || clienteCorrente == null) return 0.0f;
 
-        gestoreCorse.terminaCorsa(corsaCorrente, monopattinoSelezionato, utenteCorrente, latArrivo, lonArrivo, guastoSegnalato, passiEffettuati);
+        float costo = gestoreCorse.terminaCorsa(corsaCorrente, monopattinoSelezionato, clienteCorrente, latArrivo, lonArrivo, guastoSegnalato, passiEffettuati);
         
         corsaCorrente = null; 
         monopattinoSelezionato = null;
+        return costo;
+    }
+
+    // --- NUOVI METODI ITERAZIONE 3 (UC5 e UC6) ---
+
+    public float ricaricaCredito(float importo) {
+        if (this.clienteCorrente == null) return -1.0f; 
+        gestoreAccount.ricaricaCredito(this.clienteCorrente, importo);
+        return this.clienteCorrente.getCreditoResiduo();
+    }
+
+    public List<Corsa> richiediStoricoCorse() {
+        if (this.clienteCorrente != null) {
+            return gestoreStorico.getStoricoCliente(this.clienteCorrente, this.storicoCorse);
+        }
+        return new ArrayList<>();
+    }
+
+    // --- GESTIONE MANUTENZIONE E FLOTTA (UC2 e UC4) ---
+
+    public void aggiungiNuovoMonopattino(String idVeicolo, float lat, float lon) {
+        Monopattino m = new Monopattino(idVeicolo, lat, lon);
+        flotta.aggiungi(m);
+        System.out.println("[Admin] Veicolo " + idVeicolo + " registrato.");
     }
     
     public List<Monopattino> richiediVeicoliInManutenzione() {
@@ -129,33 +177,18 @@ public class UrbanScoot {
 
     public void prendiInCarico(String idVeicolo) {
         Monopattino m = flotta.cerca(idVeicolo);
-        if (m != null) {
-            gestoreManutenzione.prendiInCarico(m);
-        }
+        if (m != null) gestoreManutenzione.prendiInCarico(m);
     }
 
     public void registraManutenzioneCompletata(String idVeicolo) {
         Monopattino m = flotta.cerca(idVeicolo);
-        if (m != null) {
-            gestoreManutenzione.completaRiparazione(m);
-        }
+        if (m != null) gestoreManutenzione.completaRiparazione(m);
     }
 
     public boolean isVeicoloInManutenzione(String idVeicolo) {
         Monopattino m = flotta.cerca(idVeicolo);
-        if (m != null) {
-            return m.getStatoCorrente().isManutenzione();
-        }
+        if (m != null) return m.getStatoCorrente().isManutenzione();
         return false;
-    }
-    
-    public String autenticaUtente(String username, String password) {
-        if (credenzialiAccesso.containsKey(username)) {
-            if (credenzialiAccesso.get(username).equals(password)) {
-                return ruoliUtenti.get(username); 
-            }
-        }
-        return "ERRORE";
     }
 
     public List<Monopattino> getFlotta() {
@@ -164,28 +197,25 @@ public class UrbanScoot {
 
     public boolean isVeicoloDismesso(String idVeicolo) {
         Monopattino m = flotta.cerca(idVeicolo);
-        if (m != null) {
-            return m.getStatoCorrente().isDismesso();
-        }
+        if (m != null) return m.getStatoCorrente().isDismesso();
         return false;
     }
     
     public void dismettiVeicolo(String idVeicolo) {
         Monopattino m = flotta.cerca(idVeicolo);
-        if (m != null) {
-            gestoreManutenzione.dismettiVeicolo(m, flotta);
-        }
+        if (m != null) gestoreManutenzione.dismettiVeicolo(m, flotta);
     }
     
     public void segnaVeicoloDismesso(String idVeicolo) {
         Monopattino m = flotta.cerca(idVeicolo);
-        if (m != null) {
-            gestoreManutenzione.segnaVeicoloDismesso(m);
-        }
+        if (m != null) gestoreManutenzione.segnaVeicoloDismesso(m);
     }
 
+    // --- UTILITY ---
+
     public float registraNuovoUtente(String username, String password) {
-        if (utentiRegistrati.containsKey(username) || credenzialiAccesso.containsKey(username)) {
+        // Controllo aggiornato per usare la mappa corretta (clientiRegistrati)
+        if (clientiRegistrati.containsKey(username) || credenzialiAccesso.containsKey(username)) {
             System.out.println("[App] Errore: Username già in uso.");
             return -1.0f; 
         }
@@ -195,7 +225,7 @@ public class UrbanScoot {
 
         Cliente nuovoCliente = new Cliente(username, creditoGenerato);
         
-        utentiRegistrati.put(username, nuovoCliente);
+        clientiRegistrati.put(username, nuovoCliente);
         credenzialiAccesso.put(username, password);
         ruoliUtenti.put(username, "UTENTE");
         

@@ -9,10 +9,7 @@ public class Amministratore extends Utente{
         return this.getId();
     }
 
-    @Override
-    public boolean puoNoleggiare() {
-    return false; // L'admin gestisce, non noleggia
-    }
+
 
   
 }
