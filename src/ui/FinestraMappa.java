@@ -6,12 +6,12 @@ import java.awt.event.*;
 import java.util.*;
 import java.util.List;
 import java.util.Queue;
-
 import javax.swing.Timer;
 
 import controller.UrbanScoot;
 import dominio.Monopattino;
-import dominio.Corsa; // <-- IMPORTANTE: aggiunto per lo storico
+import dominio.Corsa; 
+import stati.EsitoOperazione; 
 
 public class FinestraMappa extends JFrame {
     private UrbanScoot controller;
@@ -76,7 +76,6 @@ public class FinestraMappa extends JFrame {
             
             add(tabbedPane, BorderLayout.CENTER);
         } else {
-            // L'admin vede solo la mappa
             add(pannello, BorderLayout.CENTER); 
         }
 
@@ -84,7 +83,6 @@ public class FinestraMappa extends JFrame {
         setLocationRelativeTo(null); 
     }
 
-    // --- PANNELLO UC5: RICARICA CREDITO ---
     private JPanel creaPannelloRicarica() {
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
@@ -112,7 +110,7 @@ public class FinestraMappa extends JFrame {
                 if (nuovoCredito != -1.0f) {
                     lblMessaggio.setText("✅ Ricarica effettuata con successo! Nuovo saldo: " + String.format("%.2f", nuovoCredito) + " €");
                     lblMessaggio.setForeground(new Color(0, 150, 0));
-                    txtImporto.setText(""); // Svuota il campo
+                    txtImporto.setText(""); 
                 } else {
                     lblMessaggio.setText("❌ Errore durante la ricarica.");
                     lblMessaggio.setForeground(Color.RED);
@@ -132,7 +130,6 @@ public class FinestraMappa extends JFrame {
         return panel;
     }
 
-    // --- PANNELLO UC6: STORICO CORSE ---
     private JPanel creaPannelloStorico() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
@@ -146,7 +143,6 @@ public class FinestraMappa extends JFrame {
         btnAggiorna.addActionListener(e -> {
             txtStorico.setText("=== STORICO CORSE DI " + usernameSession.toUpperCase() + " ===\n\n");
             
-            // Richiama l'operazione di sistema
             List<Corsa> corse = controller.richiediStoricoCorse();
             
             if (corse.isEmpty()) {
@@ -155,7 +151,6 @@ public class FinestraMappa extends JFrame {
               for (Corsa c : corse) {
                     txtStorico.append("🛴 Veicolo:\t" + c.getMonopattino().getId() + "\n");
                     txtStorico.append("🕒 Data:\t" + c.getOrarioInizio().toLocalDate() + " " + c.getOrarioInizio().toLocalTime().withNano(0) + "\n");
-                    // NUOVA RIGA:
                     txtStorico.append("💶 Costo:\t" + String.format("%.2f", c.getCostoTotale()) + " €\n");
                     txtStorico.append("--------------------------------------------------\n");
                 }
@@ -169,7 +164,6 @@ public class FinestraMappa extends JFrame {
     }
 }
 
-// --- CLASSE MAPPAPANEL (INTATTA) ---
 class MappaPanel extends JPanel {
     private UrbanScoot controller;
     private boolean isAdmin;
@@ -270,7 +264,17 @@ class MappaPanel extends JPanel {
                         if (itinerario.isEmpty()) return;
 
                         if (!controller.puoPermettersiCorsa(itinerario.size())) {
-                            JOptionPane.showMessageDialog(MappaPanel.this, "Credito insufficiente per questo tragitto!", "Errore", JOptionPane.ERROR_MESSAGE);
+                            JOptionPane.showMessageDialog(MappaPanel.this, 
+                                "Credito insufficiente per questa distanza!\nLa corsa verrà terminata nell'attuale posizione.", 
+                                "Fondi Insufficienti", JOptionPane.WARNING_MESSAGE);
+                            
+                            // RISOLUZIONE BUG: se l'utente non ha soldi per questo tragitto, terminiamo 
+                            // la corsa sul posto in modo che il monopattino torni disponibile.
+                            controller.terminaCorsa(scooterR, scooterC, false, 0);
+                            corsaAttiva = false;
+                            inMovimento = false;
+                            idVeicoloInUso = "";
+                            repaint();
                             return; 
                         }
                         avviaAnimazioneViaggio(itinerario, rigaC, colC);
@@ -281,34 +285,72 @@ class MappaPanel extends JPanel {
     }
 
     private void avviaNoleggio(Monopattino m, int rigaC, int colC) {
-        if (controller.isVeicoloInManutenzione(m.getId()) || controller.isVeicoloDismesso(m.getId())) {
-            JOptionPane.showMessageDialog(MappaPanel.this, "Questo veicolo è guasto o dismesso!", "Errore", JOptionPane.ERROR_MESSAGE);
+        if (isAdmin) {
+            JOptionPane.showMessageDialog(MappaPanel.this, 
+                "Errore: Gli account Amministratore non sono abilitati al noleggio.", 
+                "Accesso Negato", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
         int scelta = JOptionPane.showConfirmDialog(null, "Vuoi noleggiare " + m.getId() + "?", "Avvia", JOptionPane.YES_NO_OPTION);
         if (scelta == JOptionPane.YES_OPTION) {
             
-            controller.inserisciCodiceQR(m.getId(), this.usernameUtenteCorrente);
+            // 1. Invio del QR e verifica dell'esito
+            EsitoOperazione esitoQR = controller.inserisciCodiceQR(m.getId(), this.usernameUtenteCorrente);
+            if (esitoQR != EsitoOperazione.SUCCESSO) {
+                gestisciErroreStato(esitoQR);
+                return;
+            }
+
+            // RISOLUZIONE BUG: Verifichiamo a priori se l'utente possiede almeno i fondi per lo scatto iniziale
+            if (!controller.puoPermettersiCorsa(0)) {
+                JOptionPane.showMessageDialog(this, "Credito insufficiente per coprire i costi di sblocco.", "Fondi Insufficienti", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             
-            if (controller.confermaAvvioCorsa()) {
+            // 2. Avvio effettivo e verifica dell'esito
+            EsitoOperazione esitoAvvio = controller.confermaAvvioCorsa();
+            if (esitoAvvio == EsitoOperazione.SUCCESSO) {
                 corsaAttiva = true;
                 idVeicoloInUso = m.getId();
                 scooterR = rigaC;
                 scooterC = colC;
                 repaint();
             } else {
-                if (isAdmin) {
-                    JOptionPane.showMessageDialog(MappaPanel.this, 
-                        "Errore: Gli account Amministratore non sono abilitati al noleggio.", 
-                        "Accesso Negato", JOptionPane.ERROR_MESSAGE);
-                } else {
-                    JOptionPane.showMessageDialog(MappaPanel.this, 
-                        "Impossibile avviare la corsa! Batteria o Credito insufficienti.", 
-                        "Errore Avvio", JOptionPane.ERROR_MESSAGE);
-                }
+                gestisciErroreStato(esitoAvvio);
             }
         }
+    }
+
+    private void gestisciErroreStato(EsitoOperazione esito) {
+        switch (esito) {
+            case VEICOLO_IN_USO:
+                JOptionPane.showMessageDialog(this, "Il veicolo è già in uso.", "Non Disponibile", JOptionPane.WARNING_MESSAGE);
+                break;
+            case VEICOLO_IN_MANUTENZIONE:
+            case VEICOLO_IN_RIPARAZIONE:
+                JOptionPane.showMessageDialog(this, "Il veicolo è attualmente guasto o in riparazione.", "Manutenzione", JOptionPane.WARNING_MESSAGE);
+                break;
+            case VEICOLO_DISMESSO:
+                JOptionPane.showMessageDialog(this, "Il veicolo è stato dismesso e non può essere utilizzato.", "Dismesso", JOptionPane.ERROR_MESSAGE);
+                break;
+            case OPERAZIONE_NON_CONSENTITA:
+                JOptionPane.showMessageDialog(this, "Operazione non consentita.\nVerifica di avere credito sufficiente o di non aver scansionato il veicolo errato.", "Accesso Negato", JOptionPane.ERROR_MESSAGE);
+                break;
+            default:
+                JOptionPane.showMessageDialog(this, "Si è verificato un errore imprevisto.", "Errore", JOptionPane.ERROR_MESSAGE);
+                break;
+        }
+    }
+    
+    // Metodo helper per recuperare lo stato della batteria aggiornata
+    private int getBatteriaAggiornata(String idVeicolo) {
+        for (Monopattino m : controller.getFlotta()) {
+            if (m.getId().equals(idVeicolo)) {
+                return m.getBatteria();
+            }
+        }
+        return 0;
     }
 
     private void generaTrappolaCasuale() {
@@ -388,12 +430,16 @@ class MappaPanel extends JPanel {
                     if (mappaLayout[scooterR][scooterC] == 2) {
                         ((Timer) e.getSource()).stop(); 
                         
-                        // 1. INCIDENTE: Termina la corsa, ottiene il costo (che sarà 0.0f) e mostra la ricevuta
                         float costo = controller.terminaCorsa(scooterR, scooterC, true, step);
+                        float saldoResiduo = controller.ricaricaCredito(0); // Interroghiamo il sistema a costo 0
+                        int batteriaResidua = getBatteriaAggiornata(idVeicoloInUso);
+                        
                         JOptionPane.showMessageDialog(MappaPanel.this, 
                             "A seguito di impatto con una buca il monopattino risulta danneggiato!\n" +
                             "La corsa è stata rimborsata per il disagio.\n\n" +
-                            "Costo Addebitato: " + String.format("%.2f", costo) + " €",
+                            "Costo Addebitato: " + String.format("%.2f", costo) + " €\n" +
+                            "Credito Residuo: " + String.format("%.2f", saldoResiduo) + " €\n" +
+                            "Batteria Monopattino: " + batteriaResidua + "%",
                             "Ricevuta - Incidente", JOptionPane.ERROR_MESSAGE);
                         
                         controller.segnaVeicoloDismesso(idVeicoloInUso); 
@@ -411,12 +457,16 @@ class MappaPanel extends JPanel {
                     int destRealeR = itinerarioEffettivo.get(itinerarioEffettivo.size() - 1).x;
                     int destRealeC = itinerarioEffettivo.get(itinerarioEffettivo.size() - 1).y;
                     
-                    // 2. ARRIVO NORMALE: Termina la corsa, ottiene il costo effettivo e mostra la ricevuta
                     float costo = controller.terminaCorsa(destRealeR, destRealeC, false, itinerarioEffettivo.size() - 1);
+                    float saldoResiduo = controller.ricaricaCredito(0);
+                    int batteriaResidua = getBatteriaAggiornata(idVeicoloInUso);
+                    
                     JOptionPane.showMessageDialog(MappaPanel.this, 
                         "Hai parcheggiato correttamente il veicolo.\n\n" +
                         "Distanza percorsa: " + (itinerarioEffettivo.size() - 1) + " passi\n" +
-                        "Costo Addebitato: " + String.format("%.2f", costo) + " €\n\n" +
+                        "Costo Addebitato: " + String.format("%.2f", costo) + " €\n" +
+                        "Credito Residuo: " + String.format("%.2f", saldoResiduo) + " €\n" +
+                        "Batteria Monopattino: " + batteriaResidua + "%\n\n" +
                         "Il tuo saldo è stato aggiornato.",
                         "Ricevuta Corsa", JOptionPane.INFORMATION_MESSAGE);
                         

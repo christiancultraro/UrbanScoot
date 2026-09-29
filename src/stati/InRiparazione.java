@@ -3,40 +3,37 @@ package stati;
 import dominio.Monopattino;
 
 public class InRiparazione implements StatoMonopattino {
-    
-    // --- AGGIUNTO SINGLETON ---
+
     private static InRiparazione istanza;
-    
+
     private InRiparazione() {}
-    
+
     public static InRiparazione getInstance() {
         if (istanza == null) {
             istanza = new InRiparazione();
         }
         return istanza;
     }
-    // --------------------------
 
     @Override
-    public boolean avviaCorsa(Monopattino m) {
-        System.out.println("Errore: Veicolo in riparazione.");
-        return false;
+    public EsitoOperazione avviaCorsa(Monopattino m) {
+        return EsitoOperazione.VEICOLO_IN_RIPARAZIONE;
     }
 
     @Override
-    public boolean terminaCorsa(Monopattino m) {
-        System.out.println("Errore: Veicolo non in uso.");
-        return false;
-    }
-    
-    @Override 
-    public boolean isRiparazione() { 
-        return true; 
+    public EsitoOperazione terminaCorsa(Monopattino m) {
+        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
     }
 
-    @Override 
-    public void completaRiparazione(Monopattino m) {
+    @Override
+    public boolean isRiparazione() {
+        return true;
+    }
+
+    @Override
+    public EsitoOperazione completaRiparazione(Monopattino m) {
         m.setBatteria(100);
-        m.setStato(Disponibile.getInstance()); 
+        m.setStato(Disponibile.getInstance());
+        return EsitoOperazione.SUCCESSO;
     }
 }

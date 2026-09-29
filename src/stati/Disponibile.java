@@ -1,33 +1,29 @@
 package stati;
+
 import dominio.Monopattino;
 
 public class Disponibile implements StatoMonopattino {
-    
-    // Pattern Singleton per stati senza variabili d'istanza
+
     private static Disponibile istanza;
-    
-   
-    private Disponibile() {} 
-    
+
+    private Disponibile() {}
+
     public static Disponibile getInstance() {
         if (istanza == null) {
             istanza = new Disponibile();
         }
         return istanza;
     }
-    
+
     @Override
-    public boolean avviaCorsa(Monopattino m) {
-        // Il pattern State delega qui il cambiamento dinamico di stato
-        m.setStato(InUso.getInstance()); // Cambio stato dinamico
-        System.out.println("Sblocco veicolo " + m.getId() + " effettuato.");
-        return true; // L'operazione va a buon fine
+    public EsitoOperazione avviaCorsa(Monopattino m) {
+        m.setStato(InUso.getInstance());
+        return EsitoOperazione.SUCCESSO;
     }
 
     @Override
-    public boolean terminaCorsa(Monopattino m) {
-        System.out.println("Errore: Il monopattino è già disponibile e fermo.");
-        return false; // Operazione non valida in questo stato
+    public EsitoOperazione terminaCorsa(Monopattino m) {
+        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
     }
 
     @Override

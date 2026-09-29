@@ -14,34 +14,23 @@ public class Corsa {
         this.monopattino = m;
         this.orarioInizio = LocalDateTime.now();
     }
-    public Cliente getCliente() {
-        return this.cliente;
-    }
-    public Monopattino getMonopattino() {
-        return this.monopattino;
-    }
-    public LocalDateTime getOrarioInizio() {
-        return orarioInizio;
-    }
+    
+    public Cliente getCliente() { return this.cliente; }
+    public Monopattino getMonopattino() { return this.monopattino; }
+    public LocalDateTime getOrarioInizio() { return orarioInizio; }
 
-    public float calcolaCostoFinale(Tariffa t, int passiEffettuati) {
+    public float calcolaCostoFinale(Tariffa tariffaApplicata, int passiEffettuati) {
         this.orarioFine = LocalDateTime.now();
         
         long minutiTrascorsi = Duration.between(orarioInizio, orarioFine).toMinutes();
         if (minutiTrascorsi == 0) minutiTrascorsi = 1; 
         
-        // LA VERA FORMULA COMPLETA:
-        // Scatto iniziale + (Costo Tempo) + (Costo Distanza)
-        this.costoTotale = t.getScattoIniziale() + 
-                           (minutiTrascorsi * t.getCostoAlMinuto()) + 
-                           (passiEffettuati * t.getCostoPerCasella());
+        //  La Corsa non conosce più la formula ma interroga l'interfaccia 
+        this.costoTotale = tariffaApplicata.calcolaCosto(minutiTrascorsi, passiEffettuati);
                            
         return this.costoTotale;
     }
-    public float getCostoTotale() {
-        return this.costoTotale;
-    }
-    public void setCostoTotale(float nuovoCosto) {
-        this.costoTotale = nuovoCosto;
-    }
+    
+    public float getCostoTotale() { return this.costoTotale; }
+    public void setCostoTotale(float nuovoCosto) { this.costoTotale = nuovoCosto; }
 }
