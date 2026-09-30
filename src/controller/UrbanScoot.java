@@ -375,4 +375,12 @@ public class UrbanScoot {
     public float getUltimaQuotaSosta() {
         return this.ultimaQuotaSosta;
     }
+/**
+     * Metodo ad uso esclusivo dei test per ripristinare il Singleton
+     * e garantire l'indipendenza di ogni test case (Teardown).
+     */
+    public static void resetInstancePerTest() {
+        istanza = null;
+    }
+
 }
