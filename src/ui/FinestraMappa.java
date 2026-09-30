@@ -148,7 +148,7 @@ public class FinestraMappa extends JFrame {
             if (corse.isEmpty()) {
                 txtStorico.append(" Nessuna corsa effettuata finora.\n");
             } else {
-              for (Corsa c : corse) {
+                for (Corsa c : corse) {
                     txtStorico.append("🛴 Veicolo:\t" + c.getMonopattino().getId() + "\n");
                     txtStorico.append("🕒 Data:\t" + c.getOrarioInizio().toLocalDate() + " " + c.getOrarioInizio().toLocalTime().withNano(0) + "\n");
                     txtStorico.append("💶 Costo:\t" + String.format("%.2f", c.getCostoTotale()) + " €\n");
@@ -194,12 +194,57 @@ class MappaPanel extends JPanel {
     private int scooterR = 0; 
     private int scooterC = 0;
 
+    // Passi totali già percorsi nella corsa corrente (somma dei tratti prima di ogni sosta breve)
+    private int passiAccumulati = 0;
+
+    // ---------------------------------------------------------------------
+    // STATO DELLA CORSA IN SOSTA, CONSERVATO TRA LOGOUT E NUOVO LOGIN
+    // (il MappaPanel viene ricreato ad ogni login, quindi salviamo qui lo
+    //  stato minimo necessario per ripristinare la corsa)
+    // ---------------------------------------------------------------------
+    private static final Map<String, String> veicoloInSostaPerUtente = new HashMap<>();
+    private static final Map<String, Integer> passiInSostaPerUtente = new HashMap<>();
+
+    private void salvaStatoSosta() {
+        if (isAdmin || usernameUtenteCorrente == null) return;
+        veicoloInSostaPerUtente.put(usernameUtenteCorrente, idVeicoloInUso);
+        passiInSostaPerUtente.put(usernameUtenteCorrente, passiAccumulati);
+    }
+
+    private void cancellaStatoSosta() {
+        if (usernameUtenteCorrente == null) return;
+        veicoloInSostaPerUtente.remove(usernameUtenteCorrente);
+        passiInSostaPerUtente.remove(usernameUtenteCorrente);
+    }
+
+    /** Se l'utente aveva un veicolo in sosta breve prima del logout, ripristina la corsa. */
+    private void ripristinaCorsaInSosta() {
+        if (isAdmin || usernameUtenteCorrente == null) return;
+
+        String idSalvato = veicoloInSostaPerUtente.get(usernameUtenteCorrente);
+        if (idSalvato == null) return;
+
+        for (Monopattino m : controller.getFlotta()) {
+            if (m.getId().equals(idSalvato) && m.getStatoCorrente().isInSosta()) {
+                corsaAttiva = true;
+                idVeicoloInUso = idSalvato;
+                scooterR = (int) m.getLatitudine();
+                scooterC = (int) m.getLongitudine();
+                passiAccumulati = passiInSostaPerUtente.getOrDefault(usernameUtenteCorrente, 0);
+                return;
+            }
+        }
+        // Il veicolo non è più in sosta (o non esiste più): stato salvato non valido
+        cancellaStatoSosta();
+    }
+
     public MappaPanel(UrbanScoot controller, boolean isAdmin, String username) {
         this.controller = controller;
         this.isAdmin = isAdmin;
         this.usernameUtenteCorrente = username; 
 
         generaTrappolaCasuale();
+        ripristinaCorsaInSosta();
 
         addMouseListener(new MouseAdapter() {
             @Override
@@ -210,8 +255,12 @@ class MappaPanel extends JPanel {
                 int rigaC = e.getY() / DIM_CELLA;
                 if (rigaC < 0 || rigaC >= mappaLayout.length || colC < 0 || colC >= mappaLayout[0].length) return;
                 
+                // Muro/Ostacolo
                 if (mappaLayout[rigaC][colC] == 1) return; 
 
+                // -------------------------------------------------------------
+                // 1. MODALITÀ AGGIUNTA VEICOLO (ADMIN - UC2)
+                // -------------------------------------------------------------
                 if (modalitaAggiunta && isAdmin) {
                     if (mappaLayout[rigaC][colC] == 3) {
                         String nuovoId = "MONO-0" + contatoreVeicoli++;
@@ -226,6 +275,9 @@ class MappaPanel extends JPanel {
                     return;
                 }
 
+                // -------------------------------------------------------------
+                // 2. NESSUNA CORSA ATTIVA: AVVIO NOLEGGIO O MANUTENZIONE ADMIN
+                // -------------------------------------------------------------
                 if (!corsaAttiva) {
                     for (Monopattino m : controller.getFlotta()) {
                         if ((int)m.getLatitudine() == rigaC && (int)m.getLongitudine() == colC) {
@@ -244,44 +296,110 @@ class MappaPanel extends JPanel {
                                 }
                                 return;
                             }
+
+                            // Veicolo in sosta breve di un altro utente: non noleggiabile
+                            if (!isAdmin && m.getStatoCorrente().isInSosta()) {
+                                JOptionPane.showMessageDialog(MappaPanel.this, 
+                                    "Questo veicolo è in sosta breve per un altro utente.\nNon è disponibile al noleggio.", 
+                                    "Veicolo in Sosta", JOptionPane.WARNING_MESSAGE);
+                                return;
+                            }
                             
                             avviaNoleggio(m, rigaC, colC);
                             return; 
                         }
                     }
                 } 
+                // -------------------------------------------------------------
+                // 3. CORSA ATTIVA: GESTIONE PARCHEGGIO O SOSTA BREVE (UC3 / UC7)
+                // -------------------------------------------------------------
                 else {
-                    if (mappaLayout[rigaC][colC] != 3) {
-                        JOptionPane.showMessageDialog(MappaPanel.this, 
-                            "Errore Sosta Vietata!\nDevi parcheggiare nelle zone delimitate dalla 'P' azzurra.", 
-                            "Estensione 4a UC3", JOptionPane.WARNING_MESSAGE);
-                        return; 
+                    // CASO A: IL MONOPATTINO È ATTUALMENTE IN SOSTA BREVE
+                    if (isVeicoloInSosta()) {
+                        if (rigaC == scooterR && colC == scooterC) {
+                            int riprendi = JOptionPane.showConfirmDialog(null, 
+                                "Il monopattino è in sosta breve.\nVuoi riprendere la corsa?", 
+                                "Riprendi Corsa", JOptionPane.YES_NO_OPTION);
+                            if (riprendi == JOptionPane.YES_OPTION) {
+                                EsitoOperazione esito = controller.riprendiCorsa();
+                                if (esito == EsitoOperazione.SUCCESSO) {
+                                    cancellaStatoSosta(); // la corsa è di nuovo in movimento
+                                    JOptionPane.showMessageDialog(MappaPanel.this, "Corsa ripresa! Puoi continuare a guidare.");
+                                } else {
+                                    gestisciErroreStato(esito);
+                                }
+                                repaint();
+                            }
+                        } else {
+                            JOptionPane.showMessageDialog(MappaPanel.this, 
+                                "Il veicolo è in pausa.\nClicca sul monopattino per riprendere la marcia prima di spostarti.", 
+                                "Veicolo in Sosta", JOptionPane.WARNING_MESSAGE);
+                        }
+                        return;
                     }
 
-                    int scelta = JOptionPane.showConfirmDialog(null, "Parcheggiare qui?", "Termina", JOptionPane.YES_NO_OPTION);
-                    if (scelta == JOptionPane.YES_OPTION) {
-                        List<Point> itinerario = trovaPercorso(scooterR, scooterC, rigaC, colC);
-                        if (itinerario.isEmpty()) return;
+                    // CASO B: PARCHEGGIO DEFINITIVO (Cella 'P' == 3)
+                    if (mappaLayout[rigaC][colC] == 3) {
+                        int scelta = JOptionPane.showConfirmDialog(null, 
+                            "Sei in un'Area di Parcheggio (P).\nVuoi parcheggiare qui e terminare la corsa?", 
+                            "Termina Corsa", JOptionPane.YES_NO_OPTION);
+                        
+                        if (scelta == JOptionPane.YES_OPTION) {
+                            List<Point> itinerario = trovaPercorso(scooterR, scooterC, rigaC, colC);
+                            if (itinerario.isEmpty()) return;
 
-                        if (!controller.puoPermettersiCorsa(itinerario.size())) {
-                            JOptionPane.showMessageDialog(MappaPanel.this, 
-                                "Credito insufficiente per questa distanza!\nLa corsa verrà terminata nell'attuale posizione.", 
-                                "Fondi Insufficienti", JOptionPane.WARNING_MESSAGE);
-                            
-                            // RISOLUZIONE BUG: se l'utente non ha soldi per questo tragitto, terminiamo 
-                            // la corsa sul posto in modo che il monopattino torni disponibile.
-                            controller.terminaCorsa(scooterR, scooterC, false, 0);
-                            corsaAttiva = false;
-                            inMovimento = false;
-                            idVeicoloInUso = "";
-                            repaint();
-                            return; 
+                            if (!controller.puoPermettersiCorsa(passiAccumulati + itinerario.size())) {
+                                JOptionPane.showMessageDialog(MappaPanel.this, 
+                                    "Credito insufficiente per raggiungere questa distanza!\nLa corsa verrà terminata nell'attuale posizione.", 
+                                    "Fondi Insufficienti", JOptionPane.WARNING_MESSAGE);
+                                
+                                controller.terminaCorsa(scooterR, scooterC, false, passiAccumulati);
+                                corsaAttiva = false;
+                                inMovimento = false;
+                                idVeicoloInUso = "";
+                                passiAccumulati = 0;
+                                cancellaStatoSosta();
+                                repaint();
+                                return; 
+                            }
+                            // Viaggio normale verso la fine della corsa
+                            avviaAnimazioneViaggio(itinerario, false);
                         }
-                        avviaAnimazioneViaggio(itinerario, rigaC, colC);
+                    } 
+                    // CASO C: SOSTA BREVE SU STRADA / FUORI AREA (Cella generica == 0 o 2)
+                    else {
+                        int scelta = JOptionPane.showConfirmDialog(null, 
+                            "Questa non è un'area di parcheggio autorizzata (P).\nVuoi effettuare una Sosta Breve (Pausa) in questo punto?", 
+                            "Richiesta Sosta Breve", JOptionPane.YES_NO_OPTION);
+                        
+                        if (scelta == JOptionPane.YES_OPTION) {
+                            List<Point> itinerario = trovaPercorso(scooterR, scooterC, rigaC, colC);
+                            if (itinerario.isEmpty()) return;
+
+                            if (!controller.puoPermettersiCorsa(passiAccumulati + itinerario.size())) {
+                                JOptionPane.showMessageDialog(MappaPanel.this, 
+                                    "Credito insufficiente per raggiungere questo punto per la sosta!", 
+                                    "Fondi Insufficienti", JOptionPane.WARNING_MESSAGE);
+                                return;
+                            }
+                            // Viaggio verso il punto in cui attivare la sosta breve
+                            avviaAnimazioneViaggio(itinerario, true);
+                        }
                     }
                 }
             }
         });
+    }
+
+    /** True se il veicolo della corsa attiva è attualmente in sosta breve. */
+    private boolean isVeicoloInSosta() {
+        if (!corsaAttiva) return false;
+        for (Monopattino m : controller.getFlotta()) {
+            if (m.getId().equals(idVeicoloInUso)) {
+                return m.getStatoCorrente().isInSosta();
+            }
+        }
+        return false;
     }
 
     private void avviaNoleggio(Monopattino m, int rigaC, int colC) {
@@ -302,7 +420,7 @@ class MappaPanel extends JPanel {
                 return;
             }
 
-            // RISOLUZIONE BUG: Verifichiamo a priori se l'utente possiede almeno i fondi per lo scatto iniziale
+            // Verifichiamo a priori se l'utente possiede almeno i fondi per lo scatto iniziale
             if (!controller.puoPermettersiCorsa(0)) {
                 JOptionPane.showMessageDialog(this, "Credito insufficiente per coprire i costi di sblocco.", "Fondi Insufficienti", JOptionPane.WARNING_MESSAGE);
                 return;
@@ -315,6 +433,7 @@ class MappaPanel extends JPanel {
                 idVeicoloInUso = m.getId();
                 scooterR = rigaC;
                 scooterC = colC;
+                passiAccumulati = 0;
                 repaint();
             } else {
                 gestisciErroreStato(esitoAvvio);
@@ -406,9 +525,16 @@ class MappaPanel extends JPanel {
         return percorso;
     }
 
-   private void avviaAnimazioneViaggio(List<Point> itinerario, int destR, int destC) {
+    /**
+     * @param sostaBreve true  = al termine del viaggio il veicolo entra in sosta breve (la corsa resta attiva)
+     *                   false = al termine del viaggio la corsa viene terminata (parcheggio in P)
+     */
+    private void avviaAnimazioneViaggio(List<Point> itinerario, boolean sostaBreve) {
         inMovimento = true;
-        int maxPassi = Math.max(0, controller.getBatteriaSelezionato() / 4); 
+
+        // Il percorso è calcolato a partire dalla cella corrente, quindi il primo elemento è già un passo.
+        // La batteria nel dominio viene scalata solo a fine corsa: sottraiamo i passi già fatti.
+        int maxPassi = Math.max(0, controller.getBatteriaSelezionato() / 4 - passiAccumulati); 
         
         final List<Point> itinerarioEffettivo;
         if ((itinerario.size() - 1) > maxPassi) {
@@ -430,8 +556,8 @@ class MappaPanel extends JPanel {
                     if (mappaLayout[scooterR][scooterC] == 2) {
                         ((Timer) e.getSource()).stop(); 
                         
-                        float costo = controller.terminaCorsa(scooterR, scooterC, true, step);
-                        float saldoResiduo = controller.ricaricaCredito(0); // Interroghiamo il sistema a costo 0
+                        float costo = controller.terminaCorsa(scooterR, scooterC, true, passiAccumulati + step);
+                        float saldoResiduo = controller.getCreditoResiduoCliente(); 
                         int batteriaResidua = getBatteriaAggiornata(idVeicoloInUso);
                         
                         JOptionPane.showMessageDialog(MappaPanel.this, 
@@ -447,6 +573,8 @@ class MappaPanel extends JPanel {
                         corsaAttiva = false;
                         inMovimento = false;
                         idVeicoloInUso = ""; 
+                        passiAccumulati = 0;
+                        cancellaStatoSosta();
                         repaint();
                         return;
                     }
@@ -456,23 +584,57 @@ class MappaPanel extends JPanel {
                     ((Timer) e.getSource()).stop(); 
                     int destRealeR = itinerarioEffettivo.get(itinerarioEffettivo.size() - 1).x;
                     int destRealeC = itinerarioEffettivo.get(itinerarioEffettivo.size() - 1).y;
-                    
-                    float costo = controller.terminaCorsa(destRealeR, destRealeC, false, itinerarioEffettivo.size() - 1);
-                    float saldoResiduo = controller.ricaricaCredito(0);
-                    int batteriaResidua = getBatteriaAggiornata(idVeicoloInUso);
-                    
-                    JOptionPane.showMessageDialog(MappaPanel.this, 
-                        "Hai parcheggiato correttamente il veicolo.\n\n" +
-                        "Distanza percorsa: " + (itinerarioEffettivo.size() - 1) + " passi\n" +
-                        "Costo Addebitato: " + String.format("%.2f", costo) + " €\n" +
-                        "Credito Residuo: " + String.format("%.2f", saldoResiduo) + " €\n" +
-                        "Batteria Monopattino: " + batteriaResidua + "%\n\n" +
-                        "Il tuo saldo è stato aggiornato.",
-                        "Ricevuta Corsa", JOptionPane.INFORMATION_MESSAGE);
+                    int passi = itinerarioEffettivo.size() - 1;
+
+                    if (sostaBreve) {
+                        // La corsa resta attiva: il veicolo entra in stato di sosta breve
+                        passiAccumulati += passi;
+                        EsitoOperazione esitoSosta = controller.mettiInSosta(destRealeR, destRealeC);
                         
+                        inMovimento = false;
+                        repaint();
+
+                        if (esitoSosta == EsitoOperazione.SUCCESSO) {
+                            // Salviamo lo stato: servirà se l'utente fa logout e poi rientra
+                            salvaStatoSosta();
+                            JOptionPane.showMessageDialog(MappaPanel.this, 
+                                "Sosta breve attivata.\nClicca sul monopattino per riprendere la corsa.",
+                                "Sosta Breve", JOptionPane.INFORMATION_MESSAGE);
+                        } else {
+                            gestisciErroreStato(esitoSosta);
+                        }
+                        return;
+                    }
+                    
+                    int passiTotali = passiAccumulati + passi;
+                    float costo = controller.terminaCorsa(destRealeR, destRealeC, false, passiTotali);
+                    float saldoResiduo = controller.getCreditoResiduoCliente();
+                    int batteriaResidua = getBatteriaAggiornata(idVeicoloInUso);
+
+                    // Recupero scorporo quote calcolate dalle Strategy
+                    float quotaGuida = controller.getUltimaQuotaGuida();
+                    float quotaSosta = controller.getUltimaQuotaSosta();
+
+                    String ricevuta = "=== RICEVUTA CORSA ===\n\n"
+                            + "Distanza percorsa: " + passiTotali + " passi\n\n"
+                            + "DETTAGLIO COSTI:\n"
+                            + " • Quota Marcia (Standard): " + String.format("%.2f", quotaGuida) + " €\n"
+                            + " • Quota Sosta Breve:      " + String.format("%.2f", quotaSosta) + " €\n"
+                            + "--------------------------------------\n"
+                            + "TOTALE ADDEBITATO:         " + String.format("%.2f", costo) + " €\n\n"
+                            + "Credito Residuo: " + String.format("%.2f", saldoResiduo) + " €\n"
+                            + "Batteria Monopattino: " + batteriaResidua + "%\n\n"
+                            + "Il veicolo è stato parcheggiato correttamente.";
+
+                    JOptionPane.showMessageDialog(MappaPanel.this,
+                            ricevuta,
+                            "Ricevuta di Fine Corsa", JOptionPane.INFORMATION_MESSAGE);
+
                     corsaAttiva = false;
                     inMovimento = false;
-                    idVeicoloInUso = ""; 
+                    idVeicoloInUso = "";
+                    passiAccumulati = 0;
+                    cancellaStatoSosta();
                     repaint();
                 }
             }
@@ -517,10 +679,14 @@ class MappaPanel extends JPanel {
             int px = (int)m.getLongitudine() * DIM_CELLA;
             int py = (int)m.getLatitudine() * DIM_CELLA;
 
+            boolean inSosta = m.getStatoCorrente().isInSosta();
+
             if (controller.isVeicoloDismesso(m.getId())) {
                 g2d.setColor(Color.BLACK); 
             } else if (controller.isVeicoloInManutenzione(m.getId())) {
                 g2d.setColor(Color.ORANGE); 
+            } else if (inSosta) {
+                g2d.setColor(Color.ORANGE); // veicolo in sosta breve (di un altro utente)
             } else {
                 g2d.setColor(Color.GREEN); 
             }
@@ -528,17 +694,23 @@ class MappaPanel extends JPanel {
             g2d.fillOval(px + 5, py + 5, DIM_CELLA - 10, DIM_CELLA - 10);
             g2d.setColor(Color.WHITE);
             g2d.setFont(new Font("Arial", Font.BOLD, 10));
-            g2d.drawString(m.getId().replace("MONO-", ""), px + 18, py + 28);
+
+            if (inSosta && !controller.isVeicoloDismesso(m.getId()) && !controller.isVeicoloInManutenzione(m.getId())) {
+                g2d.drawString("SOSTA", px + 8, py + 28);
+            } else {
+                g2d.drawString(m.getId().replace("MONO-", ""), px + 18, py + 28);
+            }
         }
 
         if (corsaAttiva) {
             int px = scooterC * DIM_CELLA;
             int py = scooterR * DIM_CELLA;
-            g2d.setColor(Color.RED); 
+            boolean inSosta = isVeicoloInSosta();
+            g2d.setColor(inSosta ? Color.ORANGE : Color.RED); 
             g2d.fillOval(px + 5, py + 5, DIM_CELLA - 10, DIM_CELLA - 10);
             g2d.setColor(Color.WHITE);
             g2d.setFont(new Font("Arial", Font.BOLD, 10));
-            g2d.drawString("IN USO", px + 8, py + 28);
+            g2d.drawString(inSosta ? "SOSTA" : "IN USO", px + 8, py + 28);
         }
     }
 }

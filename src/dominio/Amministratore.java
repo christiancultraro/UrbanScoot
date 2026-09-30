@@ -9,7 +9,10 @@ public class Amministratore extends Utente{
         return this.getId();
     }
 
-
+    @Override
+    public boolean isAdmin() {
+        return true;
+    }
 
   
 }

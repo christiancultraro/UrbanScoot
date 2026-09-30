@@ -23,9 +23,9 @@ public class Cliente extends Utente {
         }
     }
 
-    public boolean puoNoleggiare() {
-        return true; 
-    }
+   public boolean puoNoleggiare() {
+    return this.creditoResiduo >= 1.00f;
+}
 
     public float getCreditoResiduo() {
         return this.creditoResiduo; 

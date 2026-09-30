@@ -61,6 +61,16 @@ public class Monopattino {
         return statoCorrente.terminaCorsa(this);
     }
 
+    // NUOVO: mette il monopattino in sosta breve
+    public EsitoOperazione mettiInPausa() {
+        return statoCorrente.mettiInPausa(this);
+    }
+
+    // NUOVO: riprende la corsa dopo la sosta
+    public EsitoOperazione riprendiCorsa() {
+        return statoCorrente.riprendiCorsa(this);
+    }
+
     public void consumaBatteria(int passiEffettuati) {
         int consumo = passiEffettuati * 4;
         livelloBatteria -= consumo;
@@ -68,5 +78,8 @@ public class Monopattino {
         if (livelloBatteria < 0) {
             livelloBatteria = 0;
         }
+    }
+    public EsitoOperazione verificaDisponibilita() {
+        return statoCorrente.verificaDisponibilita();
     }
 }

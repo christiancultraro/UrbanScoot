@@ -38,30 +38,37 @@ public class FinestraLogin extends JFrame {
         panelBtn.add(btnLogin);
         panelBtn.add(btnRegistrati);
 
-        // --- AZIONE: LOGIN ---
+        // --- AZIONE: LOGIN (Conforme a boolean e CQS) ---
         btnLogin.addActionListener(e -> {
-            String user = txtUsername.getText();
-            String pass = new String(txtPassword.getPassword());
+            String user = txtUsername.getText().trim();
+            String pass = new String(txtPassword.getPassword()).trim();
 
-            String ruolo = controller.autenticaUtente(user, pass);
+            if (user.isEmpty() || pass.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Compila tutti i campi prima di accedere.", "Attenzione", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
 
-            if (ruolo.equals("ADMIN")) {
-                JOptionPane.showMessageDialog(this, "Benvenuto Amministratore!");
-                // Ora passiamo correttamente il parametro 'user'
-                apriMappa(true, user); 
-            } else if (ruolo.equals("UTENTE")) {
-                JOptionPane.showMessageDialog(this, "Accesso effettuato.");
-                // Ora passiamo correttamente il parametro 'user'
-                apriMappa(false, user); 
+            // Invocazione dell'operazione di sistema con ritorno boolean
+            boolean successo = controller.autenticaUtente(user, pass);
+
+            if (successo) {
+                // Interroga lo stato della sessione (isSessioneAdmin) senza violare CQS
+                if (controller.isSessioneAdmin()) {
+                    JOptionPane.showMessageDialog(this, "Benvenuto Amministratore!");
+                    apriMappa(true, user); 
+                } else {
+                    JOptionPane.showMessageDialog(this, "Accesso effettuato.");
+                    apriMappa(false, user); 
+                }
             } else {
-                JOptionPane.showMessageDialog(this, "Credenziali errate!", "Errore", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Credenziali errate o non registrate!", "Errore", JOptionPane.ERROR_MESSAGE);
             }
         });
 
         // --- AZIONE: REGISTRAZIONE ---
         btnRegistrati.addActionListener(e -> {
-            String user = txtUsername.getText();
-            String pass = new String(txtPassword.getPassword());
+            String user = txtUsername.getText().trim();
+            String pass = new String(txtPassword.getPassword()).trim();
 
             if (user.isEmpty() || pass.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Inserisci Username e Password per registrarti.", "Attenzione", JOptionPane.WARNING_MESSAGE);
@@ -90,7 +97,6 @@ public class FinestraLogin extends JFrame {
         add(panelBtn);
     }
 
-    // --- IL METODO AGGIORNATO CHE CAUSAVA L'ERRORE ---
     private void apriMappa(boolean isAdmin, String username) {
         this.dispose(); 
         new FinestraMappa(isAdmin, username).setVisible(true);

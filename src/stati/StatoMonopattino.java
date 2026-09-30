@@ -31,4 +31,22 @@ public interface StatoMonopattino {
     default EsitoOperazione completaRiparazione(Monopattino m) {
         return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
     }
+    default EsitoOperazione mettiInPausa(Monopattino m) {
+        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+    }
+
+    default EsitoOperazione riprendiCorsa(Monopattino m) {
+        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+    }
+
+    default boolean isInSosta() {
+        return false;
+    }
+   
+    default EsitoOperazione verificaDisponibilita() {
+    return EsitoOperazione.SUCCESSO;
+}
+default boolean isCorsaAttiva() {
+    return false;
+}
 }

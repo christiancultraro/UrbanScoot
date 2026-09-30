@@ -35,4 +35,8 @@ public class InManutenzione implements StatoMonopattino {
         m.setStato(InRiparazione.getInstance());
         return EsitoOperazione.SUCCESSO;
     }
+    @Override
+public EsitoOperazione verificaDisponibilita() {
+    return EsitoOperazione.VEICOLO_IN_MANUTENZIONE;
+}
 }

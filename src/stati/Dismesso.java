@@ -29,4 +29,8 @@ public class Dismesso implements StatoMonopattino {
     public boolean isDismesso() {
         return true;
     }
+    @Override
+public EsitoOperazione verificaDisponibilita() {
+    return EsitoOperazione.VEICOLO_DISMESSO;
+}
 }

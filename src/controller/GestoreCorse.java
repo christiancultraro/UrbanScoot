@@ -2,7 +2,7 @@ package controller;
 
 import dominio.Corsa;
 import dominio.Monopattino;
-import dominio.Tariffa; // Importiamo l'interfaccia Strategy
+import dominio.Tariffa;
 import dominio.Cliente;
 import stati.InManutenzione;
 import stati.Disponibile;
@@ -11,23 +11,15 @@ import stati.EsitoOperazione;
 public class GestoreCorse {
 
     public EsitoOperazione iniziaCorsa(Cliente cliente, Monopattino m) {
-
-        float cred = cliente.getCreditoResiduo();
-        int batt = m.getBatteria();
-
-        // Controllo per lo sblocco iniziale
-        if (cred < 1.00f) {
+        if (cliente == null || m == null) {
             return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
         }
-
-        if (batt <= 10) {
+        if (!cliente.puoNoleggiare()) {
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+    }
+        if (m.getBatteria() <= 10) {
             return EsitoOperazione.VEICOLO_IN_MANUTENZIONE;
         }
-
-        if (!m.getStatoCorrente().isDisponibile()) {
-            return m.sblocca();
-        }
-
         return m.sblocca();
     }
 
@@ -35,7 +27,29 @@ public class GestoreCorse {
         return new Corsa(cliente, m);
     }
 
-    // NUOVA FIRMA: Il metodo ora riceve la strategia tariffaria da applicare, senza istanziarla internamente
+    public EsitoOperazione mettiInSosta(Corsa c, Monopattino m, float lat, float lon) {
+        if (m == null || c == null) {
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+        }
+        m.setPosizione(lat, lon);
+        EsitoOperazione esito = m.mettiInPausa();
+        if (esito == EsitoOperazione.SUCCESSO) {
+            c.registraInizioSosta();
+        }
+        return esito;
+    }
+
+    public EsitoOperazione riprendiCorsa(Corsa c, Monopattino m) {
+        if (m == null || c == null) {
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+        }
+        EsitoOperazione esito = m.riprendiCorsa();
+        if (esito == EsitoOperazione.SUCCESSO) {
+            c.registraFineSosta();
+        }
+        return esito;
+    }
+
     public float terminaCorsa(
             Corsa corsaCorrente,
             Monopattino monopattinoSelezionato,
@@ -44,41 +58,31 @@ public class GestoreCorse {
             float lonArrivo,
             boolean guastoSegnalato,
             int passiEffettuati,
-            Tariffa tariffaApplicata) { // <-- Parametro Strategy aggiunto
+            Tariffa tariffaStandard,
+            Tariffa tariffaSosta) {
 
         monopattinoSelezionato.setPosizione(latArrivo, lonArrivo);
 
-        // DELEGA: GestoreCorse inoltra la Strategy a Corsa, applicando l'Information Expert
         float costo = corsaCorrente.calcolaCostoFinale(
-            tariffaApplicata, 
-            passiEffettuati
+                tariffaStandard,
+                tariffaSosta,
+                passiEffettuati
         );
 
         monopattinoSelezionato.consumaBatteria(passiEffettuati);
 
         if (guastoSegnalato) {
-
             costo = 0.0f;
             corsaCorrente.setCostoTotale(0.0f);
-
-            monopattinoSelezionato.setStato(
-                InManutenzione.getInstance()
-            );
-
+            monopattinoSelezionato.setStato(InManutenzione.getInstance());
         } else {
-
             if (monopattinoSelezionato.getBatteria() <= 10) {
-                monopattinoSelezionato.setStato(
-                    InManutenzione.getInstance()
-                );
+                monopattinoSelezionato.setStato(InManutenzione.getInstance());
             } else {
-                monopattinoSelezionato.setStato(
-                    Disponibile.getInstance()
-                );
+                monopattinoSelezionato.setStato(Disponibile.getInstance());
             }
+            cliente.scalaCredito(costo);
         }
-
-        cliente.scalaCredito(costo);
 
         return costo;
     }

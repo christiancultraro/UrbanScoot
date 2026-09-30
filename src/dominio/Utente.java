@@ -10,4 +10,7 @@ public abstract class Utente {
     public String getId() {
         return this.idUtente;
     }
+    public boolean isAdmin() {
+        return false;
+    }
 }

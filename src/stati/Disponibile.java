@@ -30,4 +30,8 @@ public class Disponibile implements StatoMonopattino {
     public boolean isDisponibile() {
         return true;
     }
+    @Override
+    public EsitoOperazione verificaDisponibilita() {
+        return EsitoOperazione.SUCCESSO;
+    }
 }
