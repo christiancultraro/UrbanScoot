@@ -18,9 +18,7 @@ public class GestoreManutenzione {
         m.getStatoCorrente().completaRiparazione(m);
     }
 
-    public void dismettiVeicolo(Monopattino m, Flotta flotta) {
-        flotta.rimuovi(m.getId());
-    }
+
 
     public void segnaVeicoloDismesso(Monopattino m) {
         m.setStato(Dismesso.getInstance());

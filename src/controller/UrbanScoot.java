@@ -327,13 +327,18 @@ public class UrbanScoot {
         return flotta.getVeicoli();
     }
 
+   // =========================================================================
+    // UC4: DISMISSIONE E RIMOZIONE VEICOLO
+    // =========================================================================
+
+    // Contratto CO3: Rimozione definitiva dalla Flotta (Information Expert)
     public void dismettiVeicolo(String idVeicolo) {
-        Monopattino m = flotta.cerca(idVeicolo);
-        if (m != null) {
-            gestoreManutenzione.dismettiVeicolo(m, flotta);
+        if (idVeicolo != null) {
+            flotta.rimuovi(idVeicolo);
         }
     }
 
+    // Contratto CO4: Dismissione logica (cambio stato a Dismesso tramite GestoreManutenzione)
     public void segnaVeicoloDismesso(String idVeicolo) {
         Monopattino m = flotta.cerca(idVeicolo);
         if (m != null) {
