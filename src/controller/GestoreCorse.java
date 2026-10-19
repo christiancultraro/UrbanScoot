@@ -1,24 +1,20 @@
 package controller;
 
+import dominio.Cliente;
 import dominio.Corsa;
 import dominio.Monopattino;
 import dominio.Tariffa;
-import dominio.Cliente;
-import stati.InManutenzione;
-import stati.Disponibile;
-import stati.EsitoOperazione;
+import dominio.EsitoOperazione;
 
+/**
+ * Pure Fabrication: coordina il ciclo di vita del noleggio (UC1, UC3, UC7).
+ * Non decide le transizioni di stato del veicolo: le delega al Monopattino (State).
+ */
 public class GestoreCorse {
 
     public EsitoOperazione iniziaCorsa(Cliente cliente, Monopattino m) {
-        if (cliente == null || m == null) {
+        if (cliente == null || m == null || !cliente.puoNoleggiare()) {
             return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
-        }
-        if (!cliente.puoNoleggiare()) {
-            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
-    }
-        if (m.getBatteria() <= 10) {
-            return EsitoOperazione.VEICOLO_IN_MANUTENZIONE;
         }
         return m.sblocca();
     }
@@ -31,9 +27,9 @@ public class GestoreCorse {
         if (m == null || c == null) {
             return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
         }
-        m.setPosizione(lat, lon);
         EsitoOperazione esito = m.mettiInPausa();
         if (esito == EsitoOperazione.SUCCESSO) {
+            m.setPosizione(lat, lon);
             c.registraInizioSosta();
         }
         return esito;
@@ -50,9 +46,14 @@ public class GestoreCorse {
         return esito;
     }
 
-    public float terminaCorsa(
-            Corsa corsaCorrente,
-            Monopattino monopattinoSelezionato,
+    /**
+     * Chiude la corsa: transizione di stato del veicolo, calcolo del costo e addebito
+     * (oppure rimborso integrale in caso di guasto). Il costo addebitato resta
+     * consultabile tramite corsa.getCostoTotale().
+     */
+    public EsitoOperazione terminaCorsa(
+            Corsa corsa,
+            Monopattino m,
             Cliente cliente,
             float latArrivo,
             float lonArrivo,
@@ -61,29 +62,26 @@ public class GestoreCorse {
             Tariffa tariffaStandard,
             Tariffa tariffaSosta) {
 
-        monopattinoSelezionato.setPosizione(latArrivo, lonArrivo);
-
-        float costo = corsaCorrente.calcolaCostoFinale(
-                tariffaStandard,
-                tariffaSosta,
-                passiEffettuati
-        );
-
-        monopattinoSelezionato.consumaBatteria(passiEffettuati);
-
-        if (guastoSegnalato) {
-            costo = 0.0f;
-            corsaCorrente.setCostoTotale(0.0f);
-            monopattinoSelezionato.setStato(InManutenzione.getInstance());
-        } else {
-            if (monopattinoSelezionato.getBatteria() <= 10) {
-                monopattinoSelezionato.setStato(InManutenzione.getInstance());
-            } else {
-                monopattinoSelezionato.setStato(Disponibile.getInstance());
-            }
-            cliente.scalaCredito(costo);
+        // 1. Transizione di stato (Pattern State): consumo batteria e nuovo stato
+        EsitoOperazione esito = guastoSegnalato
+                ? m.segnalaGuasto(passiEffettuati)
+                : m.terminaCorsa(passiEffettuati);
+        if (esito != EsitoOperazione.SUCCESSO) {
+            return esito;
         }
 
-        return costo;
+        // 2. Posizione finale del veicolo
+        m.setPosizione(latArrivo, lonArrivo);
+
+        // 3. Calcolo del costo (Pattern Strategy)
+        corsa.calcolaCostoFinale(tariffaStandard, tariffaSosta, passiEffettuati);
+
+        // 4. Addebito oppure rimborso integrale
+        if (guastoSegnalato) {
+            corsa.annullaAddebito();
+        } else {
+            cliente.scalaCredito(corsa.getCostoTotale());
+        }
+        return EsitoOperazione.SUCCESSO;
     }
 }

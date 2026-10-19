@@ -1,7 +1,12 @@
 package stati;
 
+import dominio.EsitoOperazione;
 import dominio.Monopattino;
 
+/**
+ * Sosta breve: la corsa resta attiva e il veicolo è riservato al suo cliente.
+ * Per terminare la corsa occorre prima riprendere la marcia (riprendiCorsa).
+ */
 public class InSosta implements StatoMonopattino {
 
     private static InSosta istanza;
@@ -17,13 +22,8 @@ public class InSosta implements StatoMonopattino {
 
     @Override
     public EsitoOperazione avviaCorsa(Monopattino m) {
-        // Veicolo bloccato per altri utenti
+        // Veicolo riservato al cliente che ha attivato la sosta
         return EsitoOperazione.VEICOLO_IN_USO;
-    }
-
-    @Override
-    public EsitoOperazione terminaCorsa(Monopattino m) {
-        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
     }
 
     @Override
@@ -33,15 +33,17 @@ public class InSosta implements StatoMonopattino {
     }
 
     @Override
+    public EsitoOperazione verificaDisponibilita() {
+        return EsitoOperazione.VEICOLO_IN_USO;
+    }
+
+    @Override
     public boolean isInSosta() {
         return true;
     }
-    @Override
-    public EsitoOperazione verificaDisponibilita() {
-         return EsitoOperazione.VEICOLO_IN_USO;
-    }
+
     @Override
     public boolean isCorsaAttiva() {
-    return true;
-}
+        return true;
+    }
 }

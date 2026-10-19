@@ -1,54 +1,65 @@
 package controller;
 
-import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
-import dominio.Corsa;
-import dominio.Monopattino;
-import dominio.Utente;
-import dominio.Amministratore;
 import dominio.Cliente;
+import dominio.Corsa;
+import dominio.EsitoOperazione;
+import dominio.Flotta;
+import dominio.Monopattino;
 import dominio.Tariffa;
-import dominio.TariffaStandard;
 import dominio.TariffaSostaBreve;
-import stati.EsitoOperazione;
+import dominio.TariffaStandard;
+import dominio.Utente;
 
+/**
+ * Facade Controller (GRASP) e Singleton (GoF).
+ * Riceve le operazioni di sistema dalla UI e le delega ai gestori (Pure Fabrication).
+ *
+ * Command-Query Separation: le operazioni che modificano lo stato del sistema
+ * restituiscono solo un EsitoOperazione; i valori calcolati (costo, credito, quote)
+ * si leggono con i metodi di interrogazione dedicati.
+ */
 public class UrbanScoot {
 
     private static UrbanScoot istanza;
 
     private Flotta flotta;
-    private Map<String, Cliente> clientiRegistrati;
-    private Map<String, Amministratore> adminRegistrati;
-    private Map<String, String> credenzialiAccesso;
     private List<Corsa> storicoCorse;
 
+    // Strategie di tariffazione in vigore (Pattern Strategy)
+    private Tariffa tariffaStandard;
+    private Tariffa tariffaSosta;
+
+    // Sessione corrente
+    private Utente utenteCorrente;
+    private Cliente clienteCorrente;
     private Corsa corsaCorrente;
     private Monopattino monopattinoSelezionato;
 
-    private Utente utenteCorrente;
-    private Cliente clienteCorrente;
-    private boolean sessioneAdmin;
-
-    private GestoreCorse gestoreCorse;
-    private GestoreManutenzione gestoreManutenzione;
-    private GestoreAccount gestoreAccount;
-    private GestoreStorico gestoreStorico;
+    // Risultati dell'ultima operazione, consultabili dalla UI
+    private float ultimoCostoAddebitato = 0.0f;
     private float ultimaQuotaGuida = 0.0f;
     private float ultimaQuotaSosta = 0.0f;
+    private float ultimoCreditoAssegnato = 0.0f;
+
+    // Gestori (Pure Fabrication)
+    private GestoreAccount gestoreAccount;
+    private GestoreCorse gestoreCorse;
+    private GestoreManutenzione gestoreManutenzione;
+    private GestoreStorico gestoreStorico;
 
     private UrbanScoot() {
         flotta = new Flotta();
-        clientiRegistrati = new HashMap<>();
-        adminRegistrati = new HashMap<>();
-        credenzialiAccesso = new HashMap<>();
         storicoCorse = new ArrayList<>();
 
+        tariffaStandard = new TariffaStandard(1.00f, 0.20f, 0.05f);
+        tariffaSosta = new TariffaSostaBreve(0.10f);
+
+        gestoreAccount = new GestoreAccount();
         gestoreCorse = new GestoreCorse();
         gestoreManutenzione = new GestoreManutenzione();
-        gestoreAccount = new GestoreAccount();
         gestoreStorico = new GestoreStorico();
     }
 
@@ -59,143 +70,106 @@ public class UrbanScoot {
         return istanza;
     }
 
+    /** Caso d'uso di avviamento: dati iniziali in memoria. */
     public void loadDatiIniziali() {
-        clientiRegistrati.put("utente", new Cliente("utente", 10.50f));
-
-        Amministratore admin = new Amministratore("admin");
-        adminRegistrati.put("admin", admin);
-
-        credenzialiAccesso.put("admin", "admin");
-        credenzialiAccesso.put("utente", "utente");
-
-        aggiungiNuovoMonopattino("MONO-01", 0f, 8f);
+        gestoreAccount.registraCliente("utente", "utente", 10.50f);
+        gestoreAccount.registraAmministratore("admin", "admin");
+        flotta.aggiungi(new Monopattino("MONO-01", 0f, 8f));
     }
 
     // =========================================================================
-    // AUTENTICAZIONE E GESTIONE SESSIONE
+    // AUTENTICAZIONE E REGISTRAZIONE
     // =========================================================================
-    public boolean autenticaUtente(String username, String password) {
-        if (username == null || password == null) {
-            return false;
-        }
-
-        String user = username.trim();
-        String pass = password.trim();
-
-        if (!credenzialiAccesso.containsKey(user) || !credenzialiAccesso.get(user).equals(pass)) {
-            return false;
-        }
-
-        if (clientiRegistrati.containsKey(user)) {
-            this.clienteCorrente = clientiRegistrati.get(user);
-            this.utenteCorrente = this.clienteCorrente;
-            this.sessioneAdmin = false;
-
-            // Ripristina l'eventuale corsa o sosta attiva per questo specifico cliente
-            this.corsaCorrente = trovaCorsaAttivaPerCliente(this.clienteCorrente);
-            this.monopattinoSelezionato = (this.corsaCorrente != null) ? this.corsaCorrente.getMonopattino() : null;
-            return true;
-        }
-
-        if (adminRegistrati.containsKey(user)) {
-            this.clienteCorrente = null;
-            this.utenteCorrente = adminRegistrati.get(user);
-            this.sessioneAdmin = true;
-            this.corsaCorrente = null;
-            this.monopattinoSelezionato = null;
-            return true;
-        }
-
-        return false;
-    }
-
-    public boolean isSessioneAdmin() {
-        return this.sessioneAdmin;
-    }
-
-  private Corsa trovaCorsaAttivaPerCliente(Cliente cl) {
-    if (cl == null) return null;
-    for (Corsa c : storicoCorse) {
-        if (c.getCliente() != null && c.getCliente().getIdCliente().equals(cl.getIdCliente())) {
-            Monopattino m = c.getMonopattino();
-            if (m != null && m.getStatoCorrente().isCorsaAttiva()) {
-                return c;
-            }
-        }
-    }
-    return null;
-}
-
-    // =========================================================================
-    // UC1: AVVIO CORSA
-    // =========================================================================
-  public EsitoOperazione inserisciCodiceQR(String idVeicolo, String idUtente) {
-    if (clienteCorrente == null || !clienteCorrente.getIdCliente().equals(idUtente)) {
-        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
-    }
-    
-    // Se c'è una corsa pendente ma il monopattino è già Disponibile/Dismesso, azzera la corsa fantasma
-    if (corsaCorrente != null && corsaCorrente.getMonopattino().getStatoCorrente().isDisponibile()) {
-        corsaCorrente = null;
-        monopattinoSelezionato = null;
-    }
-
-    if (corsaCorrente != null) {
-        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
-    }
-    
-    Monopattino m = flotta.cerca(idVeicolo);
-    if (m == null) {
-        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
-    }
-    
-    EsitoOperazione esitoStato = m.verificaDisponibilita();
-    if (esitoStato != EsitoOperazione.SUCCESSO) {
-        return esitoStato;
-    }
-    this.monopattinoSelezionato = m;
-    return EsitoOperazione.SUCCESSO;
-}
-
-    public EsitoOperazione confermaAvvioCorsa() {
-        if (monopattinoSelezionato == null || clienteCorrente == null) {
+    public EsitoOperazione autenticaUtente(String username, String password) {
+        Utente u = gestoreAccount.autentica(username, password);
+        if (u == null) {
             return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
         }
 
-        if (!clienteCorrente.puoNoleggiare()) {
+        this.utenteCorrente = u;
+        // Polimorfismo: Cliente e Amministratore rispondono diversamente a isAdmin()
+        this.clienteCorrente = u.isAdmin() ? null : (Cliente) u;
+
+        // Ripristina l'eventuale corsa (o sosta) ancora attiva del cliente
+        this.corsaCorrente = trovaCorsaAttivaPerCliente(clienteCorrente);
+        this.monopattinoSelezionato = (corsaCorrente != null) ? corsaCorrente.getMonopattino() : null;
+        return EsitoOperazione.SUCCESSO;
+    }
+
+    public boolean isSessioneAdmin() {
+        return utenteCorrente != null && utenteCorrente.isAdmin();
+    }
+
+    /** Registra un nuovo cliente; il credito iniziale simula l'addebito sulla carta collegata. */
+    public EsitoOperazione registraNuovoUtente(String username, String password) {
+        float creditoSimulato = Math.round(((float) (Math.random() * 50) + 10) * 100.0f) / 100.0f;
+        EsitoOperazione esito = gestoreAccount.registraCliente(username, password, creditoSimulato);
+        if (esito == EsitoOperazione.SUCCESSO) {
+            this.ultimoCreditoAssegnato = creditoSimulato;
+        }
+        return esito;
+    }
+
+    private Corsa trovaCorsaAttivaPerCliente(Cliente cl) {
+        if (cl == null) return null;
+        for (Corsa c : storicoCorse) {
+            if (c.getCliente() == cl && c.getOrarioFine() == null
+                    && c.getMonopattino().getStatoCorrente().isCorsaAttiva()) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    // =========================================================================
+    // UC1: INIZIA CORSA
+    // =========================================================================
+    public EsitoOperazione inserisciCodiceQR(String idVeicolo, String idUtente) {
+        if (clienteCorrente == null || !clienteCorrente.getIdCliente().equals(idUtente)) {
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+        }
+        if (corsaCorrente != null) {
+            // Il cliente ha già una corsa attiva
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+        }
+
+        Monopattino m = flotta.cerca(idVeicolo);
+        if (m == null) {
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+        }
+
+        EsitoOperazione esito = m.verificaDisponibilita();
+        if (esito == EsitoOperazione.SUCCESSO) {
+            this.monopattinoSelezionato = m;
+        }
+        return esito;
+    }
+
+    public EsitoOperazione confermaAvvioCorsa() {
+        if (monopattinoSelezionato == null || clienteCorrente == null || corsaCorrente != null) {
             return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
         }
 
         EsitoOperazione esito = gestoreCorse.iniziaCorsa(clienteCorrente, monopattinoSelezionato);
-
         if (esito == EsitoOperazione.SUCCESSO) {
             Corsa c = gestoreCorse.creaCorsa(clienteCorrente, monopattinoSelezionato);
             storicoCorse.add(c);
             this.corsaCorrente = c;
         }
-
         return esito;
     }
 
-    public int getBatteriaSelezionato() {
-        if (monopattinoSelezionato != null) {
-            return monopattinoSelezionato.getBatteria();
-        }
-        return 0;
-    }
-
+    /** Stima se il credito copre una corsa di passiPrevisti passi (1 minuto di guida). */
     public boolean puoPermettersiCorsa(int passiPrevisti) {
-    if (clienteCorrente == null || !clienteCorrente.puoNoleggiare()) {
-        return false;
+        if (clienteCorrente == null || !clienteCorrente.puoNoleggiare()) {
+            return false;
+        }
+        float costoStimato = tariffaStandard.calcolaCosto(1, passiPrevisti);
+        return clienteCorrente.getCreditoResiduo() >= costoStimato;
     }
-    // Usiamo direttamente la Strategy
-    Tariffa tariffa = new TariffaStandard(1.00f, 0.20f, 0.05f);
-    float costoStimato = tariffa.calcolaCosto(1, passiPrevisti);
-    return clienteCorrente.getCreditoResiduo() >= costoStimato;
-}
 
     // =========================================================================
-    // UC7: SOSTA BREVE (Iterazione 4)
+    // UC7: GESTIONE SOSTA BREVE
     // =========================================================================
     public EsitoOperazione mettiInSosta(float lat, float lon) {
         if (corsaCorrente == null || monopattinoSelezionato == null) {
@@ -214,15 +188,16 @@ public class UrbanScoot {
     // =========================================================================
     // UC3: TERMINA CORSA E PARCHEGGIO
     // =========================================================================
-    public float terminaCorsa(float latArrivo, float lonArrivo, boolean guastoSegnalato, int passiEffettuati) {
+    /**
+     * In caso di successo il costo addebitato e lo scorporo sono consultabili con
+     * getUltimoCostoAddebitato(), getUltimaQuotaGuida() e getUltimaQuotaSosta().
+     */
+    public EsitoOperazione terminaCorsa(float latArrivo, float lonArrivo, boolean guastoSegnalato, int passiEffettuati) {
         if (corsaCorrente == null || clienteCorrente == null) {
-            return 0.0f;
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
         }
 
-        Tariffa tariffaStandard = new TariffaStandard(1.00f, 0.20f, 0.05f);
-        Tariffa tariffaSosta = new TariffaSostaBreve(0.10f);
-
-        float costo = gestoreCorse.terminaCorsa(
+        EsitoOperazione esito = gestoreCorse.terminaCorsa(
                 corsaCorrente,
                 monopattinoSelezionato,
                 clienteCorrente,
@@ -231,31 +206,32 @@ public class UrbanScoot {
                 guastoSegnalato,
                 passiEffettuati,
                 tariffaStandard,
-                tariffaSosta
-        );
-        if (guastoSegnalato) {
-            this.ultimaQuotaGuida = 0.0f;
-            this.ultimaQuotaSosta = 0.0f;
-        } else {
-            this.ultimaQuotaGuida = corsaCorrente.getQuotaGuida();
-            this.ultimaQuotaSosta = corsaCorrente.getQuotaSosta();
+                tariffaSosta);
+
+        if (esito != EsitoOperazione.SUCCESSO) {
+            // Transizione non consentita (es. veicolo in sosta): la corsa resta attiva
+            return esito;
         }
+
+        this.ultimoCostoAddebitato = corsaCorrente.getCostoTotale();
+        this.ultimaQuotaGuida = corsaCorrente.getQuotaGuida();
+        this.ultimaQuotaSosta = corsaCorrente.getQuotaSosta();
         this.corsaCorrente = null;
         this.monopattinoSelezionato = null;
-        return costo;
+        return EsitoOperazione.SUCCESSO;
     }
 
     // =========================================================================
-    // GESTIONE ACCOUNT E REGISTRAZIONE
+    // UC5: RICARICA CREDITO
     // =========================================================================
-    public float ricaricaCredito(float importo) {
-        if (clienteCorrente == null) {
-            return -1.0f;
-        }
-        gestoreAccount.ricaricaCredito(clienteCorrente, importo);
-        return clienteCorrente.getCreditoResiduo();
+    /** In caso di successo il nuovo saldo è consultabile con getCreditoResiduoCliente(). */
+    public EsitoOperazione ricaricaCredito(float importo) {
+        return gestoreAccount.ricaricaCredito(clienteCorrente, importo);
     }
 
+    // =========================================================================
+    // UC6: VISUALIZZA STORICO CORSE
+    // =========================================================================
     public List<Corsa> richiediStoricoCorse() {
         if (clienteCorrente == null) {
             return new ArrayList<>();
@@ -263,59 +239,79 @@ public class UrbanScoot {
         return gestoreStorico.getStoricoCliente(clienteCorrente, storicoCorse);
     }
 
-    public float registraNuovoUtente(String username, String password) {
-        if (username == null || username.trim().isEmpty() || password == null || password.trim().isEmpty()) {
-            return -1.0f;
+    // =========================================================================
+    // UC2: AGGIUNGI MONOPATTINO ALLA FLOTTA (solo amministratore)
+    // =========================================================================
+    public EsitoOperazione aggiungiNuovoMonopattino(String idVeicolo, float lat, float lon) {
+        if (!isSessioneAdmin() || idVeicolo == null || idVeicolo.trim().isEmpty()) {
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
         }
-
-        String user = username.trim();
-        String pass = password.trim();
-
-        if (clientiRegistrati.containsKey(user)
-                || adminRegistrati.containsKey(user)
-                || credenzialiAccesso.containsKey(user)) {
-            return -1.0f;
-        }
-
-        float creditoGenerato = (float) (Math.random() * 50) + 10;
-        creditoGenerato = Math.round(creditoGenerato * 100.0f) / 100.0f;
-
-        Cliente nuovoCliente = new Cliente(user, creditoGenerato);
-        clientiRegistrati.put(user, nuovoCliente);
-        credenzialiAccesso.put(user, pass);
-
-        return creditoGenerato;
+        boolean aggiunto = flotta.aggiungi(new Monopattino(idVeicolo.trim(), lat, lon));
+        return aggiunto ? EsitoOperazione.SUCCESSO : EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
     }
 
     // =========================================================================
-    // UC2 / UC4: AMMINISTRAZIONE FLOTTA E MANUTENZIONE
+    // UC4: GESTIONE MANUTENZIONE E RIMOZIONE VEICOLO (solo amministratore)
     // =========================================================================
-    public void aggiungiNuovoMonopattino(String idVeicolo, float lat, float lon) {
-        Monopattino m = new Monopattino(idVeicolo, lat, lon);
-        flotta.aggiungi(m);
-    }
-
     public List<Monopattino> richiediVeicoliInManutenzione() {
+        if (!isSessioneAdmin()) {
+            return new ArrayList<>();
+        }
         return gestoreManutenzione.richiediVeicoliInManutenzione(flotta);
     }
 
-    public void prendiInCarico(String idVeicolo) {
-        Monopattino m = flotta.cerca(idVeicolo);
-        if (m != null) {
-            gestoreManutenzione.prendiInCarico(m);
+    public EsitoOperazione prendiInCarico(String idVeicolo) {
+        Monopattino m = cercaVeicoloPerAdmin(idVeicolo);
+        if (m == null) {
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
         }
+        return gestoreManutenzione.prendiInCarico(m);
     }
 
-    public void registraManutenzioneCompletata(String idVeicolo) {
-        Monopattino m = flotta.cerca(idVeicolo);
-        if (m != null) {
-            gestoreManutenzione.completaRiparazione(m);
+    public EsitoOperazione registraManutenzioneCompletata(String idVeicolo) {
+        Monopattino m = cercaVeicoloPerAdmin(idVeicolo);
+        if (m == null) {
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
         }
+        return gestoreManutenzione.completaRiparazione(m);
     }
 
+    /** Contratto CO4: dismissione logica (il veicolo resta censito in stato Dismesso). */
+    public EsitoOperazione segnaVeicoloDismesso(String idVeicolo) {
+        Monopattino m = cercaVeicoloPerAdmin(idVeicolo);
+        if (m == null) {
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+        }
+        return gestoreManutenzione.segnaVeicoloDismesso(m);
+    }
+
+    /** Contratto CO3: rimozione definitiva dalla Flotta di un veicolo già dismesso. */
+    public EsitoOperazione dismettiVeicolo(String idVeicolo) {
+        Monopattino m = cercaVeicoloPerAdmin(idVeicolo);
+        if (m == null) {
+            return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+        }
+        return gestoreManutenzione.dismettiVeicolo(m, flotta);
+    }
+
+    private Monopattino cercaVeicoloPerAdmin(String idVeicolo) {
+        if (!isSessioneAdmin() || idVeicolo == null) {
+            return null;
+        }
+        return flotta.cerca(idVeicolo);
+    }
+
+    // =========================================================================
+    // INTERROGAZIONI (query pure: non modificano lo stato del sistema)
+    // =========================================================================
     public boolean isVeicoloInManutenzione(String idVeicolo) {
         Monopattino m = flotta.cerca(idVeicolo);
         return m != null && m.getStatoCorrente().isManutenzione();
+    }
+
+    public boolean isVeicoloInRiparazione(String idVeicolo) {
+        Monopattino m = flotta.cerca(idVeicolo);
+        return m != null && m.getStatoCorrente().isRiparazione();
     }
 
     public boolean isVeicoloDismesso(String idVeicolo) {
@@ -327,28 +323,15 @@ public class UrbanScoot {
         return flotta.getVeicoli();
     }
 
-   // =========================================================================
-    // UC4: DISMISSIONE E RIMOZIONE VEICOLO
-    // =========================================================================
-
-    // Contratto CO3: Rimozione definitiva dalla Flotta (Information Expert)
-    public void dismettiVeicolo(String idVeicolo) {
-        if (idVeicolo != null) {
-            flotta.rimuovi(idVeicolo);
-        }
+    public int getBatteriaSelezionato() {
+        return (monopattinoSelezionato != null) ? monopattinoSelezionato.getBatteria() : 0;
     }
 
-    // Contratto CO4: Dismissione logica (cambio stato a Dismesso tramite GestoreManutenzione)
-    public void segnaVeicoloDismesso(String idVeicolo) {
-        Monopattino m = flotta.cerca(idVeicolo);
-        if (m != null) {
-            gestoreManutenzione.segnaVeicoloDismesso(m);
-        }
+    /** Passi ancora percorribili con la carica del veicolo in uso (UC3, estensione 3a). */
+    public int getAutonomiaSelezionato() {
+        return (monopattinoSelezionato != null) ? monopattinoSelezionato.getAutonomiaPassi() : 0;
     }
 
-    // =========================================================================
-    // GETTER DI SESSIONE
-    // =========================================================================
     public Cliente getClienteCorrente() {
         return clienteCorrente;
     }
@@ -357,17 +340,18 @@ public class UrbanScoot {
         return corsaCorrente;
     }
 
-    // QUERY PURA: restituisce un dato e non modifica nulla
-    public float getCreditoResiduoCliente() {
-            if (clienteCorrente != null) {
-                return clienteCorrente.getCreditoResiduo();
-            }
-            return 0.0f;
-    }
-
     public Monopattino getMonopattinoSelezionato() {
         return monopattinoSelezionato;
     }
+
+    public float getCreditoResiduoCliente() {
+        return (clienteCorrente != null) ? clienteCorrente.getCreditoResiduo() : 0.0f;
+    }
+
+    public float getUltimoCostoAddebitato() {
+        return this.ultimoCostoAddebitato;
+    }
+
     public float getUltimaQuotaGuida() {
         return this.ultimaQuotaGuida;
     }
@@ -375,12 +359,16 @@ public class UrbanScoot {
     public float getUltimaQuotaSosta() {
         return this.ultimaQuotaSosta;
     }
-/**
+
+    public float getUltimoCreditoAssegnato() {
+        return this.ultimoCreditoAssegnato;
+    }
+
+    /**
      * Metodo ad uso esclusivo dei test per ripristinare il Singleton
      * e garantire l'indipendenza di ogni test case (Teardown).
      */
     public static void resetInstancePerTest() {
         istanza = null;
     }
-
 }

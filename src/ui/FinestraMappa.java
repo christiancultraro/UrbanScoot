@@ -11,7 +11,7 @@ import javax.swing.Timer;
 import controller.UrbanScoot;
 import dominio.Monopattino;
 import dominio.Corsa; 
-import stati.EsitoOperazione; 
+import dominio.EsitoOperazione; 
 
 public class FinestraMappa extends JFrame {
     private UrbanScoot controller;
@@ -46,7 +46,7 @@ public class FinestraMappa extends JFrame {
                 JOptionPane.showMessageDialog(this, "Clicca su un Parcheggio (P) per far spawnare il monopattino!");
             });
             adminPanel.add(btnAggiungi);
-            JLabel lblInfo = new JLabel("  (Clicca sui veicoli Arancioni per Ripararli, Neri per Dismetterli)");
+            JLabel lblInfo = new JLabel("  (Arancione = in manutenzione, Viola = in riparazione, Nero = dismesso: cliccali per gestirli)");
             lblInfo.setForeground(Color.WHITE);
             adminPanel.add(lblInfo);
         }
@@ -105,14 +105,15 @@ public class FinestraMappa extends JFrame {
         btnRicarica.addActionListener(e -> {
             try {
                 float importo = Float.parseFloat(txtImporto.getText().replace(",", "."));
-                float nuovoCredito = controller.ricaricaCredito(importo);
+                EsitoOperazione esito = controller.ricaricaCredito(importo);
                 
-                if (nuovoCredito != -1.0f) {
+                if (esito == EsitoOperazione.SUCCESSO) {
+                    float nuovoCredito = controller.getCreditoResiduoCliente();
                     lblMessaggio.setText("✅ Ricarica effettuata con successo! Nuovo saldo: " + String.format("%.2f", nuovoCredito) + " €");
                     lblMessaggio.setForeground(new Color(0, 150, 0));
                     txtImporto.setText(""); 
                 } else {
-                    lblMessaggio.setText("❌ Errore durante la ricarica.");
+                    lblMessaggio.setText("❌ Ricarica non consentita: l'importo deve essere maggiore di zero.");
                     lblMessaggio.setForeground(Color.RED);
                 }
             } catch (NumberFormatException ex) {
@@ -263,8 +264,13 @@ class MappaPanel extends JPanel {
                 // -------------------------------------------------------------
                 if (modalitaAggiunta && isAdmin) {
                     if (mappaLayout[rigaC][colC] == 3) {
-                        String nuovoId = "MONO-0" + contatoreVeicoli++;
-                        controller.aggiungiNuovoMonopattino(nuovoId, rigaC, colC);
+                        String nuovoId = String.format("MONO-%02d", contatoreVeicoli++);
+                        EsitoOperazione esitoAggiunta = controller.aggiungiNuovoMonopattino(nuovoId, rigaC, colC);
+                        if (esitoAggiunta != EsitoOperazione.SUCCESSO) {
+                            JOptionPane.showMessageDialog(MappaPanel.this,
+                                "Veicolo non registrato: identificativo già presente o permessi insufficienti.",
+                                "Errore", JOptionPane.ERROR_MESSAGE);
+                        }
                         modalitaAggiunta = false;
                         repaint();
                     } else {
@@ -283,9 +289,28 @@ class MappaPanel extends JPanel {
                         if ((int)m.getLatitudine() == rigaC && (int)m.getLongitudine() == colC) {
                             
                             if (isAdmin && controller.isVeicoloInManutenzione(m.getId())) {
-                                controller.prendiInCarico(m.getId());
-                                controller.registraManutenzioneCompletata(m.getId());
-                                JOptionPane.showMessageDialog(MappaPanel.this, "Veicolo Riparato! (UC4)");
+                                Object[] opzioni = {"Prendi in carico", "Dismetti", "Annulla"};
+                                int s = JOptionPane.showOptionDialog(null,
+                                    "Veicolo " + m.getId() + " in manutenzione.", "Manutenzione (UC4)",
+                                    JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, opzioni, opzioni[0]);
+                                if (s == 0) {
+                                    controller.prendiInCarico(m.getId());
+                                } else if (s == 1) {
+                                    controller.segnaVeicoloDismesso(m.getId());
+                                }
+                                repaint();
+                                return;
+                            } else if (isAdmin && controller.isVeicoloInRiparazione(m.getId())) {
+                                Object[] opzioni = {"Riparazione completata", "Irrecuperabile: dismetti", "Annulla"};
+                                int s = JOptionPane.showOptionDialog(null,
+                                    "Veicolo " + m.getId() + " in riparazione.", "Riparazione (UC4)",
+                                    JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE, null, opzioni, opzioni[0]);
+                                if (s == 0) {
+                                    controller.registraManutenzioneCompletata(m.getId());
+                                    JOptionPane.showMessageDialog(MappaPanel.this, "Veicolo riparato: batteria al 100% e di nuovo disponibile.");
+                                } else if (s == 1) {
+                                    controller.segnaVeicoloDismesso(m.getId());
+                                }
                                 repaint();
                                 return;
                             } else if (isAdmin && controller.isVeicoloDismesso(m.getId())) {
@@ -534,7 +559,7 @@ class MappaPanel extends JPanel {
 
         // Il percorso è calcolato a partire dalla cella corrente, quindi il primo elemento è già un passo.
         // La batteria nel dominio viene scalata solo a fine corsa: sottraiamo i passi già fatti.
-        int maxPassi = Math.max(0, controller.getBatteriaSelezionato() / 4 - passiAccumulati); 
+        int maxPassi = Math.max(0, controller.getAutonomiaSelezionato() - passiAccumulati);
         
         final List<Point> itinerarioEffettivo;
         if ((itinerario.size() - 1) > maxPassi) {
@@ -556,19 +581,19 @@ class MappaPanel extends JPanel {
                     if (mappaLayout[scooterR][scooterC] == 2) {
                         ((Timer) e.getSource()).stop(); 
                         
-                        float costo = controller.terminaCorsa(scooterR, scooterC, true, passiAccumulati + step);
+                        controller.terminaCorsa(scooterR, scooterC, true, passiAccumulati + step);
+                        float costo = controller.getUltimoCostoAddebitato();
                         float saldoResiduo = controller.getCreditoResiduoCliente(); 
                         int batteriaResidua = getBatteriaAggiornata(idVeicoloInUso);
                         
                         JOptionPane.showMessageDialog(MappaPanel.this, 
                             "A seguito di impatto con una buca il monopattino risulta danneggiato!\n" +
-                            "La corsa è stata rimborsata per il disagio.\n\n" +
+                            "La corsa è stata rimborsata per il disagio e il veicolo è stato inviato in manutenzione.\n\n" +
                             "Costo Addebitato: " + String.format("%.2f", costo) + " €\n" +
                             "Credito Residuo: " + String.format("%.2f", saldoResiduo) + " €\n" +
                             "Batteria Monopattino: " + batteriaResidua + "%",
                             "Ricevuta - Incidente", JOptionPane.ERROR_MESSAGE);
                         
-                        controller.segnaVeicoloDismesso(idVeicoloInUso); 
 
                         corsaAttiva = false;
                         inMovimento = false;
@@ -607,7 +632,8 @@ class MappaPanel extends JPanel {
                     }
                     
                     int passiTotali = passiAccumulati + passi;
-                    float costo = controller.terminaCorsa(destRealeR, destRealeC, false, passiTotali);
+                    controller.terminaCorsa(destRealeR, destRealeC, false, passiTotali);
+                    float costo = controller.getUltimoCostoAddebitato();
                     float saldoResiduo = controller.getCreditoResiduoCliente();
                     int batteriaResidua = getBatteriaAggiornata(idVeicoloInUso);
 
@@ -685,6 +711,8 @@ class MappaPanel extends JPanel {
                 g2d.setColor(Color.BLACK); 
             } else if (controller.isVeicoloInManutenzione(m.getId())) {
                 g2d.setColor(Color.ORANGE); 
+            } else if (controller.isVeicoloInRiparazione(m.getId())) {
+                g2d.setColor(new Color(128, 0, 128)); 
             } else if (inSosta) {
                 g2d.setColor(Color.ORANGE); // veicolo in sosta breve (di un altro utente)
             } else {

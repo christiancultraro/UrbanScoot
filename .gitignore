@@ -1,0 +1,8 @@
+# Output di compilazione
+bin/
+out/
+*.class
+
+# File di sistema / IDE
+.DS_Store
+Thumbs.db

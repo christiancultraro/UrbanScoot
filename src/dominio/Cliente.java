@@ -1,6 +1,9 @@
 package dominio;
 
 public class Cliente extends Utente {
+    /** Credito minimo richiesto per sbloccare un veicolo. */
+    public static final float CREDITO_MINIMO_NOLEGGIO = 1.00f;
+
     private float creditoResiduo;
 
     public Cliente(String idCliente, float creditoIniziale) {
@@ -12,22 +15,24 @@ public class Cliente extends Utente {
         return this.getId();
     }
 
-    // Metodi propri del Cliente (non più ereditati/sovrascritti da Utente)
     public void scalaCredito(float importo) {
         this.creditoResiduo -= importo;
     }
 
-    public void ricaricaCredito(float importo) {
-        if (importo > 0) {
-            this.creditoResiduo += importo;
+    /** @return false se l'importo non è valido (deve essere strettamente positivo). */
+    public boolean ricaricaCredito(float importo) {
+        if (importo <= 0) {
+            return false;
         }
+        this.creditoResiduo += importo;
+        return true;
     }
 
-   public boolean puoNoleggiare() {
-    return this.creditoResiduo >= 1.00f;
-}
+    public boolean puoNoleggiare() {
+        return this.creditoResiduo >= CREDITO_MINIMO_NOLEGGIO;
+    }
 
     public float getCreditoResiduo() {
-        return this.creditoResiduo; 
+        return this.creditoResiduo;
     }
 }

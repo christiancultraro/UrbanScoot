@@ -1,6 +1,5 @@
-package controller;
+package dominio;
 
-import dominio.Monopattino;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,8 +12,17 @@ public class Flotta {
         this.monopattini = new HashMap<>();
     }
 
-    public void aggiungi(Monopattino m) {
+    /** @return false se nella flotta esiste già un veicolo con lo stesso id. */
+    public boolean aggiungi(Monopattino m) {
+        if (m == null || contiene(m.getId())) {
+            return false;
+        }
         monopattini.put(m.getId(), m);
+        return true;
+    }
+
+    public boolean contiene(String id) {
+        return monopattini.containsKey(id);
     }
 
     public Monopattino cerca(String id) {

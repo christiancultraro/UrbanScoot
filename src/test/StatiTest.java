@@ -1,11 +1,13 @@
 package test;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import dominio.Monopattino;
+import dominio.EsitoOperazione;
 import stati.*;
 
 @DisplayName("Test Unitari: State Pattern del Monopattino")
@@ -15,68 +17,99 @@ class StatiTest {
 
     @BeforeEach
     void setUp() {
-        // Setup fixture: monopattino nuovo in posizione (0,0)
         monopattino = new Monopattino("TEST-01", 0f, 0f);
     }
 
     @Test
-    @DisplayName("TU_STATO_01: Transizioni valide nel ciclo di noleggio (Disponibile -> InUso -> InSosta -> InUso -> Disponibile)")
+    @DisplayName("TU_STATO_01: Ciclo valido Disponibile -> InUso -> InSosta -> InUso -> Disponibile")
     void testCicloStatiCompleto() {
-        // 1. All'inizio è Disponibile
         assertTrue(monopattino.getStatoCorrente().isDisponibile());
-        
-        // 2. Sblocco veicolo -> InUso
-        EsitoOperazione esitoSblocco = monopattino.sblocca();
-        assertEquals(EsitoOperazione.SUCCESSO, esitoSblocco);
+
+        assertEquals(EsitoOperazione.SUCCESSO, monopattino.sblocca());
         assertTrue(monopattino.getStatoCorrente().isCorsaAttiva());
 
-        // 3. Messa in pausa -> InSosta
-        EsitoOperazione esitoPausa = monopattino.mettiInPausa();
-        assertEquals(EsitoOperazione.SUCCESSO, esitoPausa);
+        assertEquals(EsitoOperazione.SUCCESSO, monopattino.mettiInPausa());
         assertTrue(monopattino.getStatoCorrente().isInSosta());
 
-        // 4. Da InSosta NON si può terminare direttamente la corsa
-        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.terminaCorsa());
+        // Da InSosta non si può terminare direttamente la corsa
+        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.terminaCorsa(0));
+        assertTrue(monopattino.getStatoCorrente().isInSosta(), "Lo stato non deve cambiare");
 
-        // 5. Ripresa corsa -> InUso
-        EsitoOperazione esitoRipresa = monopattino.riprendiCorsa();
-        assertEquals(EsitoOperazione.SUCCESSO, esitoRipresa);
+        assertEquals(EsitoOperazione.SUCCESSO, monopattino.riprendiCorsa());
         assertFalse(monopattino.getStatoCorrente().isInSosta());
 
-        // 6. Termina corsa -> Disponibile
-        EsitoOperazione esitoFine = monopattino.terminaCorsa();
-        assertEquals(EsitoOperazione.SUCCESSO, esitoFine);
+        assertEquals(EsitoOperazione.SUCCESSO, monopattino.terminaCorsa(5));
         assertTrue(monopattino.getStatoCorrente().isDisponibile());
+        assertEquals(80, monopattino.getBatteria(), "5 passi * 4 = 20 punti di batteria consumati");
     }
 
     @Test
-    @DisplayName("TU_STATO_02: Operazioni illegali e divieti di transizione")
+    @DisplayName("TU_STATO_02: Operazioni illegali rifiutate")
     void testTransizioniIllegali() {
-        // Un veicolo Disponibile non può terminare una corsa mai iniziata
-        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.terminaCorsa());
+        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.terminaCorsa(0));
+        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.riprendiCorsa());
+        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.segnalaGuasto(0));
 
-        // Veicolo Dismesso: non può essere sbloccato
-        monopattino.setStato(Dismesso.getInstance());
-        assertEquals(EsitoOperazione.VEICOLO_DISMESSO, monopattino.sblocca());
+        monopattino.sblocca();
+        assertEquals(EsitoOperazione.VEICOLO_IN_USO, monopattino.sblocca(), "Un veicolo in uso non si sblocca");
+        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.riprendiCorsa(), "Non si riprende una corsa non in sosta");
+        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.dismetti(), "Non si dismette un veicolo in uso");
 
-        // Veicolo in Manutenzione: non può essere sbloccato
-        monopattino.setStato(InManutenzione.getInstance());
-        assertEquals(EsitoOperazione.VEICOLO_IN_MANUTENZIONE, monopattino.sblocca());
+        monopattino.mettiInPausa();
+        assertEquals(EsitoOperazione.VEICOLO_IN_USO, monopattino.sblocca(), "Un veicolo in sosta è riservato");
     }
 
     @Test
-    @DisplayName("TU_STATO_03: Ciclo di riparazione (InManutenzione -> InRiparazione -> Disponibile)")
+    @DisplayName("TU_STATO_03: Ciclo di riparazione InManutenzione -> InRiparazione -> Disponibile")
     void testCicloRiparazione() {
-        monopattino.setBatteria(10);
-        monopattino.setStato(InManutenzione.getInstance());
+        monopattino.sblocca();
+        monopattino.segnalaGuasto(3);
+        assertTrue(monopattino.getStatoCorrente().isManutenzione());
+        assertEquals(EsitoOperazione.VEICOLO_IN_MANUTENZIONE, monopattino.sblocca());
 
-        // Presa in carico del tecnico
-        monopattino.getStatoCorrente().inviaInRiparazione(monopattino);
+        // La riparazione non può essere completata senza presa in carico
+        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.completaRiparazione());
+
+        assertEquals(EsitoOperazione.SUCCESSO, monopattino.prendiInCarico());
         assertTrue(monopattino.getStatoCorrente().isRiparazione());
+        assertEquals(EsitoOperazione.VEICOLO_IN_RIPARAZIONE, monopattino.sblocca());
 
-        // Fine manutenzione: ricarica al 100% e ritorno allo stato Disponibile
-        monopattino.getStatoCorrente().completaRiparazione(monopattino);
+        assertEquals(EsitoOperazione.SUCCESSO, monopattino.completaRiparazione());
         assertTrue(monopattino.getStatoCorrente().isDisponibile());
-        assertEquals(100, monopattino.getBatteria(), "A fine riparazione la batteria deve tornare al 100%");
+        assertEquals(100, monopattino.getBatteria());
+    }
+
+    @Test
+    @DisplayName("TU_STATO_04: Fine corsa con batteria critica -> InManutenzione (valori limite)")
+    void testFineCorsaBatteriaCritica() {
+        Monopattino sopraSoglia = new Monopattino("A", 0, 0);
+        sopraSoglia.sblocca();
+        sopraSoglia.terminaCorsa(22);             // 100 - 88 = 12% (> 10)
+        assertTrue(sopraSoglia.getStatoCorrente().isDisponibile());
+
+        Monopattino sullaSoglia = new Monopattino("B", 0, 0);
+        sullaSoglia.setBatteria(14);
+        sullaSoglia.sblocca();
+        sullaSoglia.terminaCorsa(1);              // 14 - 4 = 10% (limite incluso)
+        assertTrue(sullaSoglia.getStatoCorrente().isManutenzione());
+    }
+
+    @Test
+    @DisplayName("TU_STATO_05: Sblocco rifiutato con batteria critica")
+    void testSbloccoBatteriaCritica() {
+        monopattino.setBatteria(10);
+        assertEquals(EsitoOperazione.VEICOLO_IN_MANUTENZIONE, monopattino.sblocca());
+        assertTrue(monopattino.getStatoCorrente().isDisponibile(), "Lo stato non deve cambiare");
+    }
+
+    @Test
+    @DisplayName("TU_STATO_06: Dismissione dagli stati ammessi; Dismesso è uno stato finale")
+    void testDismissione() {
+        assertEquals(EsitoOperazione.SUCCESSO, monopattino.dismetti());
+        assertTrue(monopattino.getStatoCorrente().isDismesso());
+
+        assertEquals(EsitoOperazione.VEICOLO_DISMESSO, monopattino.sblocca());
+        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.prendiInCarico());
+        assertEquals(EsitoOperazione.OPERAZIONE_NON_CONSENTITA, monopattino.dismetti());
     }
 }

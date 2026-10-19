@@ -1,5 +1,6 @@
 package stati;
 
+import dominio.EsitoOperazione;
 import dominio.Monopattino;
 
 public class InRiparazione implements StatoMonopattino {
@@ -21,24 +22,26 @@ public class InRiparazione implements StatoMonopattino {
     }
 
     @Override
-    public EsitoOperazione terminaCorsa(Monopattino m) {
-        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
-    }
-
-    @Override
-    public boolean isRiparazione() {
-        return true;
-    }
-
-    @Override
     public EsitoOperazione completaRiparazione(Monopattino m) {
-        m.setBatteria(100);
+        m.ricaricaBatteria();
         m.setStato(Disponibile.getInstance());
+        return EsitoOperazione.SUCCESSO;
+    }
+
+    @Override
+    public EsitoOperazione dismetti(Monopattino m) {
+        // Veicolo irrecuperabile (UC4, estensione)
+        m.setStato(Dismesso.getInstance());
         return EsitoOperazione.SUCCESSO;
     }
 
     @Override
     public EsitoOperazione verificaDisponibilita() {
         return EsitoOperazione.VEICOLO_IN_RIPARAZIONE;
+    }
+
+    @Override
+    public boolean isRiparazione() {
+        return true;
     }
 }

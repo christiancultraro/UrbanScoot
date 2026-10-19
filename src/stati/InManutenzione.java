@@ -1,5 +1,6 @@
 package stati;
 
+import dominio.EsitoOperazione;
 import dominio.Monopattino;
 
 public class InManutenzione implements StatoMonopattino {
@@ -21,22 +22,24 @@ public class InManutenzione implements StatoMonopattino {
     }
 
     @Override
-    public EsitoOperazione terminaCorsa(Monopattino m) {
-        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+    public EsitoOperazione inviaInRiparazione(Monopattino m) {
+        m.setStato(InRiparazione.getInstance());
+        return EsitoOperazione.SUCCESSO;
+    }
+
+    @Override
+    public EsitoOperazione dismetti(Monopattino m) {
+        m.setStato(Dismesso.getInstance());
+        return EsitoOperazione.SUCCESSO;
+    }
+
+    @Override
+    public EsitoOperazione verificaDisponibilita() {
+        return EsitoOperazione.VEICOLO_IN_MANUTENZIONE;
     }
 
     @Override
     public boolean isManutenzione() {
         return true;
     }
-
-    @Override
-    public EsitoOperazione inviaInRiparazione(Monopattino m) {
-        m.setStato(InRiparazione.getInstance());
-        return EsitoOperazione.SUCCESSO;
-    }
-    @Override
-public EsitoOperazione verificaDisponibilita() {
-    return EsitoOperazione.VEICOLO_IN_MANUTENZIONE;
-}
 }

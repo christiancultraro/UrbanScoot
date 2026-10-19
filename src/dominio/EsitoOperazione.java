@@ -1,8 +1,7 @@
-package stati;
+package dominio;
 
 public enum EsitoOperazione {
     SUCCESSO,
-    VEICOLO_DISPONIBILE,
     VEICOLO_IN_USO,
     VEICOLO_IN_MANUTENZIONE,
     VEICOLO_IN_RIPARAZIONE,

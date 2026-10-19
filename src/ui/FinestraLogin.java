@@ -2,6 +2,7 @@ package ui;
 
 import javax.swing.*;
 import controller.UrbanScoot;
+import dominio.EsitoOperazione;
 import java.awt.*;
 
 public class FinestraLogin extends JFrame {
@@ -38,7 +39,7 @@ public class FinestraLogin extends JFrame {
         panelBtn.add(btnLogin);
         panelBtn.add(btnRegistrati);
 
-        // --- AZIONE: LOGIN (Conforme a boolean e CQS) ---
+        // --- AZIONE: LOGIN ---
         btnLogin.addActionListener(e -> {
             String user = txtUsername.getText().trim();
             String pass = new String(txtPassword.getPassword()).trim();
@@ -48,10 +49,9 @@ public class FinestraLogin extends JFrame {
                 return;
             }
 
-            // Invocazione dell'operazione di sistema con ritorno boolean
-            boolean successo = controller.autenticaUtente(user, pass);
+            EsitoOperazione esito = controller.autenticaUtente(user, pass);
 
-            if (successo) {
+            if (esito == EsitoOperazione.SUCCESSO) {
                 // Interroga lo stato della sessione (isSessioneAdmin) senza violare CQS
                 if (controller.isSessioneAdmin()) {
                     JOptionPane.showMessageDialog(this, "Benvenuto Amministratore!");
@@ -80,9 +80,10 @@ public class FinestraLogin extends JFrame {
                 "Collega Carta", JOptionPane.YES_NO_OPTION);
 
             if (scelta == JOptionPane.YES_OPTION) {
-                float creditoAssegnato = controller.registraNuovoUtente(user, pass);
+                EsitoOperazione esito = controller.registraNuovoUtente(user, pass);
 
-                if (creditoAssegnato != -1.0f) {
+                if (esito == EsitoOperazione.SUCCESSO) {
+                    float creditoAssegnato = controller.getUltimoCreditoAssegnato();
                     JOptionPane.showMessageDialog(this, 
                         "Registrazione completata!\nCarta collegata. Credito caricato dalla banca: " + creditoAssegnato + "€", 
                         "Successo", JOptionPane.INFORMATION_MESSAGE);

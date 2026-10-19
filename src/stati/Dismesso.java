@@ -1,7 +1,9 @@
 package stati;
 
+import dominio.EsitoOperazione;
 import dominio.Monopattino;
 
+/** Stato finale: il veicolo può solo essere rimosso dalla Flotta. */
 public class Dismesso implements StatoMonopattino {
 
     private static Dismesso istanza;
@@ -21,16 +23,12 @@ public class Dismesso implements StatoMonopattino {
     }
 
     @Override
-    public EsitoOperazione terminaCorsa(Monopattino m) {
-        return EsitoOperazione.OPERAZIONE_NON_CONSENTITA;
+    public EsitoOperazione verificaDisponibilita() {
+        return EsitoOperazione.VEICOLO_DISMESSO;
     }
 
     @Override
     public boolean isDismesso() {
         return true;
     }
-    @Override
-public EsitoOperazione verificaDisponibilita() {
-    return EsitoOperazione.VEICOLO_DISMESSO;
-}
 }
